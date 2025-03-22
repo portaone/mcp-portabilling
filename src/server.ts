@@ -20,6 +20,9 @@ export class OpenAPIServer {
     this.server = new Server({
       name: config.name,
       version: config.version,
+      capabilities: {
+        tools: {}
+      }
     });
     
     this.toolsManager = new ToolsManager(config);
