@@ -21,7 +21,7 @@ export class OpenAPIServer {
       name: config.name,
       version: config.version,
       capabilities: {
-        tools: true
+        tools: {}
       }
     });
     
