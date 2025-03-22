@@ -6,6 +6,7 @@ await esbuild.build({
   format: "esm",
   outfile: "./dist/bundle.js",
   target: "node18",
+  external: ["@modelcontextprotocol/sdk/*"],
   banner: {
     js: `import { createRequire } from 'module';const require = createRequire(import.meta.url);`,
   },
