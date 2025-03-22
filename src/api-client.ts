@@ -80,7 +80,7 @@ export class ApiClient {
    */
   private parseToolId(toolId: string): { method: string; path: string } {
     const [method, ...pathParts] = toolId.split("-");
-    const path = pathParts.join("/");
+    const path = "/" + pathParts.join("/").replace(/-/g, "/");
     return { method, path };
   }
 

@@ -24,7 +24,8 @@
     "prepare": "npm run build",
     "dev": "nodemon --watch src -e ts --exec 'npm run build'",
     "inspect": "node -r dotenv/config ./scripts/inspect.js",
-    "inspect-watch": "node ./scripts/inspect-watch.js"
+    "inspect-watch": "node ./scripts/inspect-watch.js",
+    "start": "node bin/mcp-server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.7.0",
