@@ -10,6 +10,8 @@ USER service-user
 
 WORKDIR /app
 
-RUN git clone https://github.com/ivo-toby/mcp-openapi-server . && git checkout 43b0c2e7500d0e0cd74cc44149a44a8af815caf5
+RUN git clone https://github.com/ivo-toby/mcp-openapi-server . && git checkout 6472c30e8a79404ab6e7e4c0c1c3998a2487139f
 
-CMD ["mcp-proxy"]
+RUN (npm install) && (npm run build)
+
+CMD ["mcp-proxy","node ./bin/mcp-server.js"]

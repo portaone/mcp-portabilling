@@ -10,7 +10,7 @@
     "url": "git+https://github.com:ivo-toby/contentful-mcp.git"
   },
   "bin": {
-    "mcp-server-contentful": "./bin/mcp-server.js"
+    "mcp-server-openapi": "./bin/mcp-server.js"
   },
   "files": [
     "dist"
