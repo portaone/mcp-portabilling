@@ -1,26 +1,26 @@
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
+import yargs from "yargs"
+import { hideBin } from "yargs/helpers"
 
 export interface OpenAPIMCPServerConfig {
-  name: string;
-  version: string;
-  apiBaseUrl: string;
-  openApiSpec: string;
-  headers?: Record<string, string>;
+  name: string
+  version: string
+  apiBaseUrl: string
+  openApiSpec: string
+  headers?: Record<string, string>
 }
 
 /**
  * Parse header string in format 'key1:value1,key2:value2' into a record
  */
 export function parseHeaders(headerStr?: string): Record<string, string> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {}
   if (headerStr) {
     headerStr.split(",").forEach((header) => {
-      const [key, value] = header.split(":");
-      if (key && value) headers[key.trim()] = value.trim();
-    });
+      const [key, value] = header.split(":")
+      if (key && value) headers[key.trim()] = value.trim()
+    })
   }
-  return headers;
+  return headers
 }
 
 /**
@@ -53,24 +53,20 @@ export function loadConfig(): OpenAPIMCPServerConfig {
       type: "string",
       description: "Server version",
     })
-    .help().argv;
+    .help().argv
 
   // Combine CLI args and env vars, with CLI taking precedence
-  const apiBaseUrl = argv["api-base-url"] || process.env.API_BASE_URL;
-  const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH;
+  const apiBaseUrl = argv["api-base-url"] || process.env.API_BASE_URL
+  const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH
 
   if (!apiBaseUrl) {
-    throw new Error(
-      "API base URL is required (--api-base-url or API_BASE_URL)",
-    );
+    throw new Error("API base URL is required (--api-base-url or API_BASE_URL)")
   }
   if (!openApiSpec) {
-    throw new Error(
-      "OpenAPI spec is required (--openapi-spec or OPENAPI_SPEC_PATH)",
-    );
+    throw new Error("OpenAPI spec is required (--openapi-spec or OPENAPI_SPEC_PATH)")
   }
 
-  const headers = parseHeaders(argv.headers || process.env.API_HEADERS);
+  const headers = parseHeaders(argv.headers || process.env.API_HEADERS)
 
   return {
     name: argv.name || process.env.SERVER_NAME || "mcp-openapi-server",
@@ -78,5 +74,5 @@ export function loadConfig(): OpenAPIMCPServerConfig {
     apiBaseUrl,
     openApiSpec,
     headers,
-  };
+  }
 }
