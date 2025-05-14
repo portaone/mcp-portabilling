@@ -54,9 +54,19 @@ describe('loadConfig', () => {
     delete process.env.SERVER_NAME
     delete process.env.SERVER_VERSION
     
-    // Mock yargs to return predefined values
+    // Reset mocks before each test
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    process.argv = [...originalArgv]
+    vi.restoreAllMocks()
+  })
+
+  it('should load config from command line arguments', () => {
+    // Mock yargs for this specific test
     vi.mock('yargs', () => ({
-      __esModule: true,
       default: () => ({
         option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
           argv: {
@@ -73,15 +83,7 @@ describe('loadConfig', () => {
     vi.mock('yargs/helpers', () => ({
       hideBin: (argv: string[]) => argv.slice(2)
     }))
-  })
-
-  afterEach(() => {
-    process.env = { ...originalEnv }
-    process.argv = [...originalArgv]
-    vi.restoreAllMocks()
-  })
-
-  it('should load config from command line arguments', () => {
+    
     const config = loadConfig()
     expect(config).toEqual({
       name: 'test-server',
@@ -95,8 +97,8 @@ describe('loadConfig', () => {
   })
 
   it('should throw error if API base URL is missing', () => {
+    // Mock yargs for this specific test
     vi.mock('yargs', () => ({
-      __esModule: true,
       default: () => ({
         option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
           argv: {
@@ -106,12 +108,22 @@ describe('loadConfig', () => {
       })
     }))
     
+    vi.mock('yargs/helpers', () => ({
+      hideBin: (argv: string[]) => argv.slice(2)
+    }))
+    
+    // Reset modules to ensure our new mock is used
+    vi.resetModules()
+    
+    // Re-import the module to use the new mock
+    const { loadConfig } = require('../src/config')
+    
     expect(() => loadConfig()).toThrow('API base URL is required')
   })
 
   it('should throw error if OpenAPI spec is missing', () => {
+    // Mock yargs for this specific test
     vi.mock('yargs', () => ({
-      __esModule: true,
       default: () => ({
         option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
           argv: {
@@ -121,12 +133,22 @@ describe('loadConfig', () => {
       })
     }))
     
+    vi.mock('yargs/helpers', () => ({
+      hideBin: (argv: string[]) => argv.slice(2)
+    }))
+    
+    // Reset modules to ensure our new mock is used
+    vi.resetModules()
+    
+    // Re-import the module to use the new mock
+    const { loadConfig } = require('../src/config')
+    
     expect(() => loadConfig()).toThrow('OpenAPI spec is required')
   })
 
   it('should use environment variables as fallback', () => {
+    // Mock yargs for this specific test
     vi.mock('yargs', () => ({
-      __esModule: true,
       default: () => ({
         option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
           argv: {}
@@ -134,11 +156,22 @@ describe('loadConfig', () => {
       })
     }))
     
+    vi.mock('yargs/helpers', () => ({
+      hideBin: (argv: string[]) => argv.slice(2)
+    }))
+    
+    // Set environment variables
     process.env.API_BASE_URL = 'https://env.example.com'
     process.env.OPENAPI_SPEC_PATH = './env-spec.json'
     process.env.API_HEADERS = 'X-API-Key:12345'
     process.env.SERVER_NAME = 'env-server'
     process.env.SERVER_VERSION = '3.2.1'
+    
+    // Reset modules to ensure our new mock is used
+    vi.resetModules()
+    
+    // Re-import the module to use the new mock
+    const { loadConfig } = require('../src/config')
     
     const config = loadConfig()
     expect(config).toEqual({
@@ -153,8 +186,8 @@ describe('loadConfig', () => {
   })
 
   it('should use default values for name and version if not provided', () => {
+    // Mock yargs for this specific test
     vi.mock('yargs', () => ({
-      __esModule: true,
       default: () => ({
         option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
           argv: {
@@ -164,6 +197,16 @@ describe('loadConfig', () => {
         }) }) }) }) }) })
       })
     }))
+    
+    vi.mock('yargs/helpers', () => ({
+      hideBin: (argv: string[]) => argv.slice(2)
+    }))
+    
+    // Reset modules to ensure our new mock is used
+    vi.resetModules()
+    
+    // Re-import the module to use the new mock
+    const { loadConfig } = require('../src/config')
     
     const config = loadConfig()
     expect(config.name).toBe('mcp-openapi-server')
