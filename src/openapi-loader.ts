@@ -37,7 +37,7 @@ export class OpenAPISpecLoader {
 
         const op = operation as OpenAPIV3.OperationObject
         // Create a clean tool ID by removing the leading slash and replacing special chars
-        const cleanPath = path.replace(/^\//, "")
+        const cleanPath = path.replace(/^\//, "").replace(/\{([^}]+)\}/g, "$1")
         const toolId = `${method.toUpperCase()}-${cleanPath}`.replace(/[^a-zA-Z0-9-]/g, "-")
 
         const name = (op.operationId || op.summary || `${method.toUpperCase()} ${path}`).replace(
@@ -63,8 +63,11 @@ export class OpenAPISpecLoader {
                 type: paramSchema.type || "string",
                 description: param.description || `${param.name} parameter`,
               }
-              if (param.required) {
-                tool.inputSchema.required = tool.inputSchema.required || []
+              // Handle required parameters
+              if (param.required === true) {
+                if (!tool.inputSchema.required) {
+                  tool.inputSchema.required = []
+                }
                 tool.inputSchema.required.push(param.name)
               }
             }
