@@ -57,6 +57,10 @@ describe('loadConfig', () => {
     
     // Reset mocks before each test
     vi.clearAllMocks()
+    
+    // Clear all mocks
+    vi.doMock('yargs', () => ({}))
+    vi.doMock('yargs/helpers', () => ({}))
   })
 
   afterEach(() => {
@@ -68,32 +72,23 @@ describe('loadConfig', () => {
 
   it('should load config from command line arguments', async () => {
     // Setup mocks before importing the module
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({
-          option: () => ({
-            option: () => ({
-              option: () => ({
-                option: () => ({
-                  help: () => ({
-                    argv: {
-                      'api-base-url': 'https://api.example.com',
-                      'openapi-spec': './spec.json',
-                      'headers': 'Authorization:Bearer token',
-                      'name': 'test-server',
-                      'version': '1.2.3'
-                    }
-                  })
-                })
-              })
-            })
-          })
+    vi.doMock('yargs', () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnValue({
+          argv: {
+            'api-base-url': 'https://api.example.com',
+            'openapi-spec': './spec.json',
+            'headers': 'Authorization:Bearer token',
+            'name': 'test-server',
+            'version': '1.2.3'
+          }
         })
       })
     }));
     
-    vi.mock('yargs/helpers', () => ({
-      hideBin: (arr) => arr
+    vi.doMock('yargs/helpers', () => ({
+      hideBin: vi.fn(arr => arr)
     }));
     
     // Import the module after setting up mocks
@@ -113,28 +108,19 @@ describe('loadConfig', () => {
 
   it('should throw error if API base URL is missing', async () => {
     // Setup mocks before importing the module
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({
-          option: () => ({
-            option: () => ({
-              option: () => ({
-                option: () => ({
-                  help: () => ({
-                    argv: {
-                      'openapi-spec': './spec.json'
-                    }
-                  })
-                })
-              })
-            })
-          })
+    vi.doMock('yargs', () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnValue({
+          argv: {
+            'openapi-spec': './spec.json'
+          }
         })
       })
     }));
     
-    vi.mock('yargs/helpers', () => ({
-      hideBin: (arr) => arr
+    vi.doMock('yargs/helpers', () => ({
+      hideBin: vi.fn(arr => arr)
     }));
     
     // Import the module after setting up mocks
@@ -145,28 +131,19 @@ describe('loadConfig', () => {
 
   it('should throw error if OpenAPI spec is missing', async () => {
     // Setup mocks before importing the module
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({
-          option: () => ({
-            option: () => ({
-              option: () => ({
-                option: () => ({
-                  help: () => ({
-                    argv: {
-                      'api-base-url': 'https://api.example.com'
-                    }
-                  })
-                })
-              })
-            })
-          })
+    vi.doMock('yargs', () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnValue({
+          argv: {
+            'api-base-url': 'https://api.example.com'
+          }
         })
       })
     }));
     
-    vi.mock('yargs/helpers', () => ({
-      hideBin: (arr) => arr
+    vi.doMock('yargs/helpers', () => ({
+      hideBin: vi.fn(arr => arr)
     }));
     
     // Import the module after setting up mocks
@@ -177,26 +154,17 @@ describe('loadConfig', () => {
 
   it('should use environment variables as fallback', async () => {
     // Setup mocks before importing the module
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({
-          option: () => ({
-            option: () => ({
-              option: () => ({
-                option: () => ({
-                  help: () => ({
-                    argv: {}
-                  })
-                })
-              })
-            })
-          })
+    vi.doMock('yargs', () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnValue({
+          argv: {}
         })
       })
     }));
     
-    vi.mock('yargs/helpers', () => ({
-      hideBin: (arr) => arr
+    vi.doMock('yargs/helpers', () => ({
+      hideBin: vi.fn(arr => arr)
     }));
     
     // Set environment variables
@@ -223,29 +191,20 @@ describe('loadConfig', () => {
 
   it('should use default values for name and version if not provided', async () => {
     // Setup mocks before importing the module
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({
-          option: () => ({
-            option: () => ({
-              option: () => ({
-                option: () => ({
-                  help: () => ({
-                    argv: {
-                      'api-base-url': 'https://api.example.com',
-                      'openapi-spec': './spec.json'
-                    }
-                  })
-                })
-              })
-            })
-          })
+    vi.doMock('yargs', () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnValue({
+          argv: {
+            'api-base-url': 'https://api.example.com',
+            'openapi-spec': './spec.json'
+          }
         })
       })
     }));
     
-    vi.mock('yargs/helpers', () => ({
-      hideBin: (arr) => arr
+    vi.doMock('yargs/helpers', () => ({
+      hideBin: vi.fn(arr => arr)
     }));
     
     // Import the module after setting up mocks
