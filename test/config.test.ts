@@ -62,29 +62,38 @@ describe('loadConfig', () => {
     process.env = { ...originalEnv }
     process.argv = [...originalArgv]
     vi.restoreAllMocks()
+    vi.resetModules()
   })
 
   it('should load config from command line arguments', () => {
-    // Mock yargs for this specific test
+    // Create a mock implementation of yargs
+    const mockYargsInstance = {
+      option: vi.fn().mockReturnThis(),
+      help: vi.fn().mockReturnThis(),
+      argv: {
+        'api-base-url': 'https://api.example.com',
+        'openapi-spec': './spec.json',
+        'headers': 'Authorization:Bearer token',
+        'name': 'test-server',
+        'version': '1.2.3'
+      }
+    };
+    
+    // Mock yargs
+    const mockYargs = vi.fn().mockReturnValue(mockYargsInstance);
     vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-          argv: {
-            'api-base-url': 'https://api.example.com',
-            'openapi-spec': './spec.json',
-            'headers': 'Authorization:Bearer token',
-            'name': 'test-server',
-            'version': '1.2.3'
-          }
-        }) }) }) }) }) })
-      })
-    }))
+      default: mockYargs
+    }));
     
+    // Mock hideBin
     vi.mock('yargs/helpers', () => ({
-      hideBin: (argv: string[]) => argv.slice(2)
-    }))
+      hideBin: vi.fn(arr => arr)
+    }));
     
-    const config = loadConfig()
+    // Import the module after mocking
+    const { loadConfig } = require('../src/config');
+    
+    const config = loadConfig();
     expect(config).toEqual({
       name: 'test-server',
       version: '1.2.3',
@@ -93,72 +102,81 @@ describe('loadConfig', () => {
       headers: {
         Authorization: 'Bearer token'
       }
-    })
+    });
   })
 
   it('should throw error if API base URL is missing', () => {
-    // Mock yargs for this specific test
+    // Create a mock implementation of yargs
+    const mockYargsInstance = {
+      option: vi.fn().mockReturnThis(),
+      help: vi.fn().mockReturnThis(),
+      argv: {
+        'openapi-spec': './spec.json'
+      }
+    };
+    
+    // Mock yargs
+    const mockYargs = vi.fn().mockReturnValue(mockYargsInstance);
     vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-          argv: {
-            'openapi-spec': './spec.json'
-          }
-        }) }) }) }) }) })
-      })
-    }))
+      default: mockYargs
+    }));
     
+    // Mock hideBin
     vi.mock('yargs/helpers', () => ({
-      hideBin: (argv: string[]) => argv.slice(2)
-    }))
+      hideBin: vi.fn(arr => arr)
+    }));
     
-    // Reset modules to ensure our new mock is used
-    vi.resetModules()
+    // Import the module after mocking
+    const { loadConfig } = require('../src/config');
     
-    // Re-import the module to use the new mock
-    const { loadConfig } = require('../src/config')
-    
-    expect(() => loadConfig()).toThrow('API base URL is required')
+    expect(() => loadConfig()).toThrow('API base URL is required');
   })
 
   it('should throw error if OpenAPI spec is missing', () => {
-    // Mock yargs for this specific test
+    // Create a mock implementation of yargs
+    const mockYargsInstance = {
+      option: vi.fn().mockReturnThis(),
+      help: vi.fn().mockReturnThis(),
+      argv: {
+        'api-base-url': 'https://api.example.com'
+      }
+    };
+    
+    // Mock yargs
+    const mockYargs = vi.fn().mockReturnValue(mockYargsInstance);
     vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-          argv: {
-            'api-base-url': 'https://api.example.com'
-          }
-        }) }) }) }) }) })
-      })
-    }))
+      default: mockYargs
+    }));
     
+    // Mock hideBin
     vi.mock('yargs/helpers', () => ({
-      hideBin: (argv: string[]) => argv.slice(2)
-    }))
+      hideBin: vi.fn(arr => arr)
+    }));
     
-    // Reset modules to ensure our new mock is used
-    vi.resetModules()
+    // Import the module after mocking
+    const { loadConfig } = require('../src/config');
     
-    // Re-import the module to use the new mock
-    const { loadConfig } = require('../src/config')
-    
-    expect(() => loadConfig()).toThrow('OpenAPI spec is required')
+    expect(() => loadConfig()).toThrow('OpenAPI spec is required');
   })
 
   it('should use environment variables as fallback', () => {
-    // Mock yargs for this specific test
-    vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-          argv: {}
-        }) }) }) }) }) })
-      })
-    }))
+    // Create a mock implementation of yargs
+    const mockYargsInstance = {
+      option: vi.fn().mockReturnThis(),
+      help: vi.fn().mockReturnThis(),
+      argv: {}
+    };
     
+    // Mock yargs
+    const mockYargs = vi.fn().mockReturnValue(mockYargsInstance);
+    vi.mock('yargs', () => ({
+      default: mockYargs
+    }));
+    
+    // Mock hideBin
     vi.mock('yargs/helpers', () => ({
-      hideBin: (argv: string[]) => argv.slice(2)
-    }))
+      hideBin: vi.fn(arr => arr)
+    }));
     
     // Set environment variables
     process.env.API_BASE_URL = 'https://env.example.com'
@@ -167,11 +185,8 @@ describe('loadConfig', () => {
     process.env.SERVER_NAME = 'env-server'
     process.env.SERVER_VERSION = '3.2.1'
     
-    // Reset modules to ensure our new mock is used
-    vi.resetModules()
-    
-    // Re-import the module to use the new mock
-    const { loadConfig } = require('../src/config')
+    // Import the module after mocking
+    const { loadConfig } = require('../src/config');
     
     const config = loadConfig()
     expect(config).toEqual({
@@ -186,27 +201,29 @@ describe('loadConfig', () => {
   })
 
   it('should use default values for name and version if not provided', () => {
-    // Mock yargs for this specific test
+    // Create a mock implementation of yargs
+    const mockYargsInstance = {
+      option: vi.fn().mockReturnThis(),
+      help: vi.fn().mockReturnThis(),
+      argv: {
+        'api-base-url': 'https://api.example.com',
+        'openapi-spec': './spec.json'
+      }
+    };
+    
+    // Mock yargs
+    const mockYargs = vi.fn().mockReturnValue(mockYargsInstance);
     vi.mock('yargs', () => ({
-      default: () => ({
-        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-          argv: {
-            'api-base-url': 'https://api.example.com',
-            'openapi-spec': './spec.json'
-          }
-        }) }) }) }) }) })
-      })
-    }))
+      default: mockYargs
+    }));
     
+    // Mock hideBin
     vi.mock('yargs/helpers', () => ({
-      hideBin: (argv: string[]) => argv.slice(2)
-    }))
+      hideBin: vi.fn(arr => arr)
+    }));
     
-    // Reset modules to ensure our new mock is used
-    vi.resetModules()
-    
-    // Re-import the module to use the new mock
-    const { loadConfig } = require('../src/config')
+    // Import the module after mocking
+    const { loadConfig } = require('../src/config');
     
     const config = loadConfig()
     expect(config.name).toBe('mcp-openapi-server')
