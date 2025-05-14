@@ -36,7 +36,6 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": "error",
 
       // Formatting rules
-      "arrow-body-style": ["error", "as-needed"],
       "prefer-arrow-callback": "error",
 
       // Prettier rules
