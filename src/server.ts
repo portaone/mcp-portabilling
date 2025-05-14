@@ -17,17 +17,16 @@ export class OpenAPIServer {
   private apiClient: ApiClient;
 
   constructor(private config: OpenAPIMCPServerConfig) {
-    this.server = new Server({
-      name: config.name,
-      version: config.version,
-      capabilities: {
-        tools: true
+    this.server = new Server(
+      { name: config.name, version: config.version },
+      {
+        capabilities: {
+          tools: {},
+        },
       }
-    });
-    
+    );
     this.toolsManager = new ToolsManager(config);
     this.apiClient = new ApiClient(config.apiBaseUrl, config.headers);
-    
     this.initializeHandlers();
   }
 
@@ -60,7 +59,7 @@ export class OpenAPIServer {
         console.error(
           `Available tools: ${Array.from(this.toolsManager.getAllTools())
             .map((t) => t.name)
-            .join(", ")}`,
+            .join(", ")}`
         );
         throw new Error(`Tool not found: ${idOrName}`);
       }
@@ -70,22 +69,29 @@ export class OpenAPIServer {
 
       try {
         // Execute the API call
-        const result = await this.apiClient.executeApiCall(toolId, params || {});
-        
+        const result = await this.apiClient.executeApiCall(
+          toolId,
+          params || {}
+        );
+
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify(result, null, 2)
-          }]
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
         };
       } catch (error) {
         if (error instanceof Error) {
           return {
-            content: [{
-              type: "text",
-              text: `Error: ${error.message}`
-            }],
-            isError: true
+            content: [
+              {
+                type: "text",
+                text: `Error: ${error.message}`,
+              },
+            ],
+            isError: true,
           };
         }
         throw error;
