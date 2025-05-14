@@ -55,24 +55,20 @@ describe('loadConfig', () => {
     delete process.env.SERVER_VERSION
     
     // Mock yargs to return predefined values
-    vi.mock('yargs', () => {
-      return {
-        default: {
-          __esModule: true,
-          default: () => ({
-            option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-              argv: {
-                'api-base-url': 'https://api.example.com',
-                'openapi-spec': './spec.json',
-                'headers': 'Authorization:Bearer token',
-                'name': 'test-server',
-                'version': '1.2.3'
-              }
-            }) }) }) }) }) })
-          })
-        }
-      }
-    })
+    vi.mock('yargs', () => ({
+      __esModule: true,
+      default: () => ({
+        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
+          argv: {
+            'api-base-url': 'https://api.example.com',
+            'openapi-spec': './spec.json',
+            'headers': 'Authorization:Bearer token',
+            'name': 'test-server',
+            'version': '1.2.3'
+          }
+        }) }) }) }) }) })
+      })
+    }))
     
     vi.mock('yargs/helpers', () => ({
       hideBin: (argv: string[]) => argv.slice(2)
@@ -99,56 +95,44 @@ describe('loadConfig', () => {
   })
 
   it('should throw error if API base URL is missing', () => {
-    vi.mock('yargs', () => {
-      return {
-        default: {
-          __esModule: true,
-          default: () => ({
-            option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-              argv: {
-                'openapi-spec': './spec.json'
-              }
-            }) }) }) }) }) })
-          })
-        }
-      }
-    })
+    vi.mock('yargs', () => ({
+      __esModule: true,
+      default: () => ({
+        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
+          argv: {
+            'openapi-spec': './spec.json'
+          }
+        }) }) }) }) }) })
+      })
+    }))
     
     expect(() => loadConfig()).toThrow('API base URL is required')
   })
 
   it('should throw error if OpenAPI spec is missing', () => {
-    vi.mock('yargs', () => {
-      return {
-        default: {
-          __esModule: true,
-          default: () => ({
-            option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-              argv: {
-                'api-base-url': 'https://api.example.com'
-              }
-            }) }) }) }) }) })
-          })
-        }
-      }
-    })
+    vi.mock('yargs', () => ({
+      __esModule: true,
+      default: () => ({
+        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
+          argv: {
+            'api-base-url': 'https://api.example.com'
+          }
+        }) }) }) }) }) })
+      })
+    }))
     
     expect(() => loadConfig()).toThrow('OpenAPI spec is required')
   })
 
   it('should use environment variables as fallback', () => {
-    vi.mock('yargs', () => {
-      return {
-        default: {
-          __esModule: true,
-          default: () => ({
-            option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-              argv: {}
-            }) }) }) }) }) })
-          })
-        }
-      }
-    })
+    vi.mock('yargs', () => ({
+      __esModule: true,
+      default: () => ({
+        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
+          argv: {}
+        }) }) }) }) }) })
+      })
+    }))
     
     process.env.API_BASE_URL = 'https://env.example.com'
     process.env.OPENAPI_SPEC_PATH = './env-spec.json'
@@ -169,21 +153,17 @@ describe('loadConfig', () => {
   })
 
   it('should use default values for name and version if not provided', () => {
-    vi.mock('yargs', () => {
-      return {
-        default: {
-          __esModule: true,
-          default: () => ({
-            option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
-              argv: {
-                'api-base-url': 'https://api.example.com',
-                'openapi-spec': './spec.json'
-              }
-            }) }) }) }) }) })
-          })
-        }
-      }
-    })
+    vi.mock('yargs', () => ({
+      __esModule: true,
+      default: () => ({
+        option: () => ({ option: () => ({ option: () => ({ option: () => ({ option: () => ({ help: () => ({
+          argv: {
+            'api-base-url': 'https://api.example.com',
+            'openapi-spec': './spec.json'
+          }
+        }) }) }) }) }) })
+      })
+    }))
     
     const config = loadConfig()
     expect(config.name).toBe('mcp-openapi-server')
