@@ -3,6 +3,7 @@ import {
   JSONRPCMessage,
   isInitializeRequest,
   isJSONRPCRequest,
+  isJSONRPCResponse,
 } from "@modelcontextprotocol/sdk/types.js"
 import * as http from "http"
 import { randomUUID } from "crypto"
@@ -14,6 +15,7 @@ interface SessionData {
   messageHandler: (message: JSONRPCMessage) => void
   activeResponses: Set<http.ServerResponse>
   initialized: boolean
+  pendingRequests: Set<string | number> // Track pending request IDs for this session
 }
 
 /**
@@ -31,6 +33,7 @@ export class StreamableHttpServerTransport implements Transport {
   private sessions: Map<string, SessionData> = new Map()
   private started = false
   private maxBodySize = 4 * 1024 * 1024 // 4MB max request size
+  private requestSessionMap: Map<string | number, string> = new Map() // Maps request IDs to session IDs
 
   /**
    * Initialize a new StreamableHttpServerTransport
@@ -128,24 +131,60 @@ export class StreamableHttpServerTransport implements Transport {
    * @param message JSON-RPC message
    */
   async send(message: JSONRPCMessage): Promise<void> {
-    // For now, broadcast to all sessions - in a production implementation
-    // you'd want to track which session each message belongs to
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for (const [sessionId, session] of this.sessions.entries()) {
-      if (session.activeResponses.size > 0) {
-        const messageStr = JSON.stringify(message) + "\n"
+    let targetSessionId: string | undefined
 
-        // Send to all active streaming connections for this session
-        for (const response of session.activeResponses) {
-          try {
-            response.write(messageStr)
-          } catch (err: unknown) {
-            // Remove dead connections
-            session.activeResponses.delete(response)
-            if (this.onerror) {
-              this.onerror(new Error(`Failed to write to response: ${(err as Error).message}`))
-            }
-          }
+    // If this is a response, find the session that sent the original request
+    if (isJSONRPCResponse(message) && message.id !== null) {
+      targetSessionId = this.requestSessionMap.get(message.id)
+      // Once we've sent the response, we can remove the mapping
+      if (targetSessionId) {
+        this.requestSessionMap.delete(message.id)
+      }
+    }
+
+    // If we couldn't find a target session or this is a notification without an ID
+    // we need to determine which session should receive it based on context
+    // For demo purposes, if no target found, fallback to broadcast with a warning
+    if (!targetSessionId) {
+      const messageId = isJSONRPCResponse(message) || isJSONRPCRequest(message) ? message.id : null
+      console.warn(
+        `No target session found for message${messageId ? ` ID: ${String(messageId)}` : " (notification)"}.`,
+      )
+
+      // Broadcast to all initialized sessions (fallback behavior)
+      for (const [sessionId, session] of this.sessions.entries()) {
+        if (session.initialized && session.activeResponses.size > 0) {
+          this.sendMessageToSession(sessionId, session, message)
+        }
+      }
+      return
+    }
+
+    // Send to the specific target session
+    const session = this.sessions.get(targetSessionId)
+    if (session && session.activeResponses.size > 0) {
+      this.sendMessageToSession(targetSessionId, session, message)
+    }
+  }
+
+  /**
+   * Helper method to send a message to a specific session
+   */
+  private sendMessageToSession(
+    sessionId: string,
+    session: SessionData,
+    message: JSONRPCMessage,
+  ): void {
+    const messageStr = JSON.stringify(message) + "\n"
+
+    for (const response of session.activeResponses) {
+      try {
+        response.write(messageStr)
+      } catch (err: unknown) {
+        // Remove dead connections
+        session.activeResponses.delete(response)
+        if (this.onerror) {
+          this.onerror(new Error(`Failed to write to response: ${(err as Error).message}`))
         }
       }
     }
@@ -318,6 +357,16 @@ export class StreamableHttpServerTransport implements Transport {
           // For requests, wait for response through the message handler
           if (isJSONRPCRequest(message)) {
             if (session.messageHandler) {
+              // Store the mapping between the request ID and session ID
+              if (message.id !== undefined && message.id !== null) {
+                this.requestSessionMap.set(message.id, sessionId)
+                // Also track this request in the session
+                if (!session.pendingRequests) {
+                  session.pendingRequests = new Set()
+                }
+                session.pendingRequests.add(message.id)
+              }
+
               session.messageHandler(message)
 
               // For requests from client, respond with immediate 202 Accepted
@@ -378,7 +427,13 @@ export class StreamableHttpServerTransport implements Transport {
       messageHandler: this.onmessage || (() => {}),
       activeResponses: new Set(),
       initialized: true,
+      pendingRequests: new Set(),
     })
+
+    // Store mapping for initialization request
+    if ("id" in message && message.id !== null && message.id !== undefined) {
+      this.requestSessionMap.set(message.id, sessionId)
+    }
 
     // Pass to message handler
     if (this.onmessage) {
@@ -474,6 +529,13 @@ export class StreamableHttpServerTransport implements Transport {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err: unknown) {
         // Ignore errors from already closed connections
+      }
+    }
+
+    // Clean up any pending requests from this session
+    if (session.pendingRequests) {
+      for (const requestId of session.pendingRequests) {
+        this.requestSessionMap.delete(requestId)
       }
     }
 
