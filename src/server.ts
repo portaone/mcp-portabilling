@@ -46,7 +46,7 @@ export class OpenAPIServer {
       console.error("Using parameters from arguments:", params)
 
       // Find tool by ID or name
-      const idOrName = id || name
+      const idOrName = typeof id === "string" ? id : typeof name === "string" ? name : ""
       if (!idOrName) {
         throw new Error("Tool ID or name is required")
       }

@@ -97,7 +97,8 @@ export class StreamableHttpServerTransport implements Transport {
       for (const response of session.activeResponses) {
         try {
           response.end()
-        } catch (err: any) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (err) {
           // Ignore errors from already closed connections
         }
       }
@@ -129,6 +130,7 @@ export class StreamableHttpServerTransport implements Transport {
   async send(message: JSONRPCMessage): Promise<void> {
     // For now, broadcast to all sessions - in a production implementation
     // you'd want to track which session each message belongs to
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for (const [sessionId, session] of this.sessions.entries()) {
       if (session.activeResponses.size > 0) {
         const messageStr = JSON.stringify(message) + "\n"
@@ -137,11 +139,11 @@ export class StreamableHttpServerTransport implements Transport {
         for (const response of session.activeResponses) {
           try {
             response.write(messageStr)
-          } catch (err: any) {
+          } catch (err: unknown) {
             // Remove dead connections
             session.activeResponses.delete(response)
             if (this.onerror) {
-              this.onerror(new Error(`Failed to write to response: ${err.message}`))
+              this.onerror(new Error(`Failed to write to response: ${(err as Error).message}`))
             }
           }
         }
@@ -222,6 +224,7 @@ export class StreamableHttpServerTransport implements Transport {
       }
 
       return true
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
       res.writeHead(400)
       res.end(
@@ -363,7 +366,7 @@ export class StreamableHttpServerTransport implements Transport {
    */
   private handleInitializeRequest(
     message: JSONRPCMessage,
-    req: http.IncomingMessage,
+    _req: http.IncomingMessage,
     res: http.ServerResponse,
   ): void {
     // Generate new session
@@ -371,6 +374,7 @@ export class StreamableHttpServerTransport implements Transport {
 
     // Create session
     this.sessions.set(sessionId, {
+      // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
       messageHandler: this.onmessage || (() => {}),
       activeResponses: new Set(),
       initialized: true,
@@ -382,9 +386,6 @@ export class StreamableHttpServerTransport implements Transport {
 
       // Unlike regular requests, for initialization we need to wait for the Protocol to generate
       // a response and call send() before closing the HTTP response, so we leave the response open
-
-      // Add this response to the session's active responses for a moment
-      const session = this.sessions.get(sessionId)!
 
       // Set headers for initialization response
       res.setHeader("Content-Type", "application/json")
@@ -470,7 +471,8 @@ export class StreamableHttpServerTransport implements Transport {
     for (const response of session.activeResponses) {
       try {
         response.end()
-      } catch (err: any) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (err: unknown) {
         // Ignore errors from already closed connections
       }
     }
