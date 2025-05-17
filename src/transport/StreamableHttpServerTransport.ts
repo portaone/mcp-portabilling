@@ -435,16 +435,52 @@ export class StreamableHttpServerTransport implements Transport {
       this.requestSessionMap.set(message.id, sessionId)
     }
 
+    // Set headers for initialization response
+    res.setHeader("Content-Type", "application/json")
+    res.setHeader("Mcp-Session-Id", sessionId)
+
     // Pass to message handler
     if (this.onmessage) {
       this.onmessage(message)
 
-      // Unlike regular requests, for initialization we need to wait for the Protocol to generate
-      // a response and call send() before closing the HTTP response, so we leave the response open
+      // For initialization requests, we need to immediately send a success response
+      // with status code 200 and the Mcp-Session-Id header
+      if ("id" in message && message.id !== null && message.id !== undefined) {
+        // Generate a basic success response according to the protocol
+        const response = {
+          jsonrpc: "2.0",
+          id: message.id,
+          result: {
+            protocolVersion: "2025-03-26",
+            serverInfo: {
+              name: "mcp-openapi-server",
+              version: "1.0.0",
+            },
+            capabilities: {},
+          },
+        }
 
-      // Set headers for initialization response
-      res.setHeader("Content-Type", "application/json")
-      res.setHeader("Mcp-Session-Id", sessionId)
+        res.writeHead(200)
+        res.end(JSON.stringify(response))
+      } else {
+        // In case there's no ID (which shouldn't happen for init requests),
+        // respond with a generic 200
+        res.writeHead(200)
+        res.end()
+      }
+    } else {
+      // No message handler, respond with an error
+      res.writeHead(500)
+      res.end(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal error: No message handler available",
+          },
+          id: "id" in message ? message.id : null,
+        }),
+      )
     }
   }
 

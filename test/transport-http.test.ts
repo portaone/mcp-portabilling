@@ -513,6 +513,61 @@ describe("StreamableHttpServerTransport", () => {
     // Verify the request ID was added to the session's pendingRequests
     expect(transportAny.sessions.get(sessionId).pendingRequests.has(555)).toBe(true)
   })
+
+  it("should properly handle initialize request with response body", async () => {
+    // Setup mock handler
+    transport.onmessage = vi.fn()
+
+    // Create init request data
+    const initData = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        client: { name: "test-client", version: "1.0.0" },
+        protocol: { name: "mcp", version: "2025-03-26" },
+      },
+    }
+
+    // Create mock request and response
+    const req = createInitRequest()
+    const res = createMockResponse()
+
+    // Access the private method to directly test initialize request handling
+    const transportAny = transport as any
+
+    // Call initialize handler directly
+    transportAny.handleInitializeRequest(initData, req, res)
+
+    // Verify response contains session ID header
+    expect(res.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", expect.any(String))
+
+    // Extract the session ID for verification
+    const sessionId = res.setHeader.mock.calls.find((call) => call[0] === "Mcp-Session-Id")?.[1]
+
+    expect(sessionId).toBeDefined()
+
+    // Verify response is sent with 200 status
+    expect(res.writeHead).toHaveBeenCalledWith(200)
+
+    // Verify response includes proper JSON-RPC response
+    expect(res.end).toHaveBeenCalled()
+    const responseArg = res.end.mock.calls[0]?.[0]
+
+    if (responseArg) {
+      const responseObj = JSON.parse(responseArg)
+      // Verify it's a proper JSON-RPC response
+      expect(responseObj.jsonrpc).toBe("2.0")
+      expect(responseObj.id).toBe(1)
+      expect(responseObj.result).toBeDefined()
+      expect(responseObj.result.protocolVersion).toBe("2025-03-26")
+      expect(responseObj.result.serverInfo).toBeDefined()
+      expect(responseObj.result.capabilities).toBeDefined()
+    }
+
+    // Verify session was created
+    expect(transportAny.sessions.has(sessionId)).toBe(true)
+  })
 })
 
 // Helper functions to create mock objects
