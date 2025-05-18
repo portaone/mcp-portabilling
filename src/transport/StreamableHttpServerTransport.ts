@@ -221,7 +221,7 @@ export class StreamableHttpServerTransport implements Transport {
     session: SessionData,
     message: JSONRPCMessage,
   ): void {
-    const messageStr = JSON.stringify(message) + "\n"
+    const messageStr = `data: ${JSON.stringify(message)}\n\n`
 
     for (const response of session.activeResponses) {
       try {
@@ -641,8 +641,8 @@ export class StreamableHttpServerTransport implements Transport {
 
     const session = this.sessions.get(sessionId)!
 
-    // Set headers for streaming response
-    res.setHeader("Content-Type", "application/json")
+    // Set headers for SSE streaming response
+    res.setHeader("Content-Type", "text/event-stream")
     res.setHeader("Connection", "keep-alive")
     res.setHeader("Cache-Control", "no-cache, no-transform")
     res.setHeader("Transfer-Encoding", "chunked")

@@ -136,7 +136,7 @@ describe("StreamableHttpServerTransport", () => {
     await transport.send(message)
 
     // Verify the message was written to the response
-    expect(mockRes.write).toHaveBeenCalledWith(JSON.stringify(message) + "\n")
+    expect(mockRes.write).toHaveBeenCalledWith(`data: ${JSON.stringify(message)}\n\n`)
 
     // Verify the message mapping was removed after sending
     expect(transportAny.requestSessionMap.has(123)).toBe(false)
@@ -244,11 +244,11 @@ describe("StreamableHttpServerTransport", () => {
     await transport.send(message2)
 
     // Verify each message was sent to the correct session only
-    expect(mockRes1.write).toHaveBeenCalledWith(JSON.stringify(message1) + "\n")
-    expect(mockRes1.write).not.toHaveBeenCalledWith(JSON.stringify(message2) + "\n")
+    expect(mockRes1.write).toHaveBeenCalledWith(`data: ${JSON.stringify(message1)}\n\n`)
+    expect(mockRes1.write).not.toHaveBeenCalledWith(`data: ${JSON.stringify(message2)}\n\n`)
 
-    expect(mockRes2.write).toHaveBeenCalledWith(JSON.stringify(message2) + "\n")
-    expect(mockRes2.write).not.toHaveBeenCalledWith(JSON.stringify(message1) + "\n")
+    expect(mockRes2.write).toHaveBeenCalledWith(`data: ${JSON.stringify(message2)}\n\n`)
+    expect(mockRes2.write).not.toHaveBeenCalledWith(`data: ${JSON.stringify(message1)}\n\n`)
 
     // Verify request mappings were cleaned up
     expect(transportAny.requestSessionMap.has(101)).toBe(false)
@@ -357,13 +357,13 @@ describe("StreamableHttpServerTransport", () => {
     expect(session.activeResponses.has(res2)).toBe(true)
 
     // Verify headers were set properly on both responses
-    expect(res1.setHeader).toHaveBeenCalledWith("Content-Type", "application/json")
+    expect(res1.setHeader).toHaveBeenCalledWith("Content-Type", "text/event-stream")
     expect(res1.setHeader).toHaveBeenCalledWith("Connection", "keep-alive")
     expect(res1.setHeader).toHaveBeenCalledWith("Cache-Control", "no-cache, no-transform")
     expect(res1.setHeader).toHaveBeenCalledWith("Transfer-Encoding", "chunked")
     expect(res1.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", sessionId)
 
-    expect(res2.setHeader).toHaveBeenCalledWith("Content-Type", "application/json")
+    expect(res2.setHeader).toHaveBeenCalledWith("Content-Type", "text/event-stream")
     expect(res2.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", sessionId)
   })
 
@@ -462,8 +462,8 @@ describe("StreamableHttpServerTransport", () => {
     expect(console.warn).toHaveBeenCalled()
 
     // Verify message was broadcast to all sessions
-    expect(mockRes1.write).toHaveBeenCalledWith(JSON.stringify(notification) + "\n")
-    expect(mockRes2.write).toHaveBeenCalledWith(JSON.stringify(notification) + "\n")
+    expect(mockRes1.write).toHaveBeenCalledWith(`data: ${JSON.stringify(notification)}\n\n`)
+    expect(mockRes2.write).toHaveBeenCalledWith(`data: ${JSON.stringify(notification)}\n\n`)
   })
 
   it("should handle POST requests and track request session mappings", () => {
