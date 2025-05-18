@@ -63,18 +63,27 @@ npx @ivotoby/openapi-mcp-server \
 # Initialize a session (first request)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"client":{"name":"curl-client","version":"1.0.0"},"protocol":{"name":"mcp","version":"2025-03-26"}}}'
+  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"client":{"name":"curl-client","version":"1.0.0"},"protocol":{"name":"mcp","version":"2025-03-26"}}}'
 
 # The response includes a Mcp-Session-Id header that you must use for subsequent requests
-
-# Open a streaming connection for server responses
-curl -N http://localhost:3000/mcp -H "Mcp-Session-Id: your-session-id"
+# and the InitializeResult directly in the POST response body.
 
 # Send a request to list tools
+# This also receives its response directly on this POST request.
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Mcp-Session-Id: your-session-id" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"listTools"}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# Open a streaming connection for other server responses (e.g., tool execution results)
+# This uses Server-Sent Events (SSE).
+curl -N http://localhost:3000/mcp -H "Mcp-Session-Id: your-session-id"
+
+# Example: Execute a tool (response will arrive on the GET stream)
+# curl -X POST http://localhost:3000/mcp \
+#  -H "Content-Type: application/json" \
+#  -H "Mcp-Session-Id: your-session-id" \
+#  -d '{"jsonrpc":"2.0","id":2,"method":"tools/execute","params":{"name":"yourToolName", "arguments": {}}}'
 
 # Terminate the session when done
 curl -X DELETE http://localhost:3000/mcp -H "Mcp-Session-Id: your-session-id"
@@ -95,9 +104,9 @@ The HTTP transport allows the MCP server to be accessed over HTTP, enabling web 
 **Key features**:
 
 - Session management with Mcp-Session-Id header
-- Chunked HTTP streaming (without Server-Sent Events)
+- HTTP responses for `initialize` and `tools/list` requests are sent synchronously on the POST.
+- Other server-to-client messages (e.g., `tools/execute` results, notifications) are streamed over a GET connection using Server-Sent Events (SSE).
 - Support for POST/GET/DELETE methods
-- Security measures against DNS rebinding attacks
 
 **When to use**: When you need to expose the MCP server to web clients or systems that communicate over HTTP rather than stdio.
 
