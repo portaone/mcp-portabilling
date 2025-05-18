@@ -154,4 +154,19 @@ describe("OpenAPIServer", () => {
     expect(mockToolsManager.initialize).toHaveBeenCalled()
     expect(mockServer.connect).toHaveBeenCalledWith(transport)
   })
+
+  it("should advertise tools capabilities in initialization response", () => {
+    // Verify the server was constructed with the correct capabilities
+    expect(Server).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        capabilities: {
+          tools: {
+            list: true,
+            execute: true,
+          },
+        },
+      }),
+    )
+  })
 })

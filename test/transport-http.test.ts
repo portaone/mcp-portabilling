@@ -515,8 +515,34 @@ describe("StreamableHttpServerTransport", () => {
   })
 
   it("should properly handle initialize request with response body", async () => {
-    // Setup mock handler
-    transport.onmessage = vi.fn()
+    // Setup mock handler to simulate the protocol layer's response
+    transport.onmessage = vi.fn((message) => {
+      // Simulate the protocol layer's response to the initialize request
+      if ("method" in message && message.method === "initialize" && "id" in message) {
+        // Create the mock response that would come from the Protocol layer
+        const response: JSONRPCMessage = {
+          jsonrpc: "2.0" as const,
+          id: message.id,
+          result: {
+            protocolVersion: "2025-03-26",
+            serverInfo: {
+              name: "test-server",
+              version: "1.0.0",
+            },
+            capabilities: {
+              // Basic capabilities
+              tools: {},
+            },
+          },
+        }
+
+        // Send the response via the transport's send method
+        // This is how the Protocol layer would respond
+        setTimeout(() => {
+          transport.send(response)
+        }, 0)
+      }
+    })
 
     // Create init request data
     const initData = {
@@ -539,19 +565,19 @@ describe("StreamableHttpServerTransport", () => {
     // Call initialize handler directly
     transportAny.handleInitializeRequest(initData, req, res)
 
+    // Wait for the async handler to process the response
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
     // Verify response contains session ID header
     expect(res.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", expect.any(String))
 
-    // Extract the session ID for verification
-    const sessionId = res.setHeader.mock.calls.find((call) => call[0] === "Mcp-Session-Id")?.[1]
+    // Verify onmessage was called with the init request
+    expect(transport.onmessage).toHaveBeenCalledWith(initData)
 
-    expect(sessionId).toBeDefined()
-
-    // Verify response is sent with 200 status
+    // Verify response was sent with the response from the protocol layer
+    expect(res.end).toHaveBeenCalled()
     expect(res.writeHead).toHaveBeenCalledWith(200)
 
-    // Verify response includes proper JSON-RPC response
-    expect(res.end).toHaveBeenCalled()
     const responseArg = res.end.mock.calls[0]?.[0]
 
     if (responseArg) {
@@ -566,7 +592,233 @@ describe("StreamableHttpServerTransport", () => {
     }
 
     // Verify session was created
+    const sessionId = res.setHeader.mock.calls.find((call) => call[0] === "Mcp-Session-Id")?.[1]
     expect(transportAny.sessions.has(sessionId)).toBe(true)
+  })
+
+  it("should correctly include server capabilities in initialize response", async () => {
+    // Set up a custom message handler that simulates the protocol layer's response
+    transport.onmessage = vi.fn((message) => {
+      // Simulate the protocol layer's response to the initialize request
+      if ("method" in message && message.method === "initialize" && "id" in message) {
+        // Create the mock response that would come from the Protocol layer
+        // with actual capabilities
+        const response: JSONRPCMessage = {
+          jsonrpc: "2.0" as const,
+          id: message.id,
+          result: {
+            protocolVersion: "2025-03-26",
+            serverInfo: {
+              name: "test-server",
+              version: "1.0.0",
+            },
+            capabilities: {
+              tools: {
+                execute: true,
+              },
+              resources: {
+                read: true,
+                list: true,
+              },
+            },
+          },
+        }
+
+        // Send the response via the transport's send method
+        // This is how the Protocol layer would respond
+        setTimeout(() => {
+          transport.send(response)
+        }, 0)
+      }
+    })
+
+    // Create init request
+    const initData = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        client: { name: "test-client", version: "1.0.0" },
+        protocol: { name: "mcp", version: "2025-03-26" },
+      },
+    }
+
+    // Create mock request and response objects
+    const req = createInitRequest()
+    const res = createMockResponse()
+
+    // Access the private method to directly test initialize request handling
+    const transportAny = transport as any
+
+    // Call initialize handler directly
+    transportAny.handleInitializeRequest(initData, req, res)
+
+    // Wait for the async handler to process the response
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Verify headers are set
+    expect(res.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", expect.any(String))
+
+    // Verify onmessage was called with the init request
+    expect(transport.onmessage).toHaveBeenCalledWith(initData)
+
+    // Verify response was sent with capabilities
+    expect(res.end).toHaveBeenCalled()
+    const responseArg = res.end.mock.calls[0]?.[0]
+
+    if (responseArg) {
+      const responseObj = JSON.parse(responseArg)
+
+      // Verify it's a proper JSON-RPC response
+      expect(responseObj.jsonrpc).toBe("2.0")
+      expect(responseObj.id).toBe(1)
+      expect(responseObj.result).toBeDefined()
+
+      // Verify capabilities are included from the protocol layer
+      expect(responseObj.result.capabilities).toEqual({
+        tools: {
+          execute: true,
+        },
+        resources: {
+          read: true,
+          list: true,
+        },
+      })
+    }
+  })
+
+  it("should handle tools/list requests synchronously", async () => {
+    // Set up a custom message handler that simulates the protocol layer's response
+    transport.onmessage = vi.fn((message) => {
+      // Simulate the protocol layer's response to the tools/list request
+      if ("method" in message && message.method === "tools/list" && "id" in message) {
+        console.error(`Test: received tools/list message in onmessage handler`)
+
+        // Create the mock response that would come from the Protocol layer
+        // with actual tools data
+        const response: JSONRPCMessage = {
+          jsonrpc: "2.0" as const,
+          id: message.id,
+          result: {
+            tools: [
+              {
+                id: "test-tool-1",
+                name: "Test Tool 1",
+                description: "A test tool for testing",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    param1: {
+                      type: "string",
+                      description: "A test parameter",
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        }
+
+        // Call the send method to simulate the protocol's response
+        console.error(`Test: sending response for tools/list request`)
+        transport.send(response)
+      }
+    })
+
+    // Create a mock session ID
+    const sessionId = "test-session-123"
+    const transportAny = transport as any
+
+    // Create session in the transport
+    transportAny.sessions.set(sessionId, {
+      messageHandler: transport.onmessage || (() => {}),
+      activeResponses: new Set(),
+      initialized: true,
+      pendingRequests: new Set(),
+    })
+
+    // Create tools/list request data
+    const toolsListRequest = {
+      jsonrpc: "2.0",
+      id: 123,
+      method: "tools/list",
+    }
+
+    // More realistic mock request with proper handlers
+    const reqHandlers: Record<string, Array<(...args: any[]) => void>> = {
+      data: [],
+      end: [],
+      error: [],
+    }
+
+    const req = {
+      url: "/mcp",
+      method: "POST",
+      headers: {
+        "mcp-session-id": sessionId,
+        "content-type": "application/json",
+      },
+      on: vi.fn((event, handler) => {
+        console.error(`Test: adding handler for ${event} event`)
+        if (reqHandlers[event]) {
+          reqHandlers[event].push(handler)
+        }
+        return req
+      }),
+      emit: vi.fn((event, ...args) => {
+        console.error(`Test: emitting ${event} event`)
+        if (reqHandlers[event]) {
+          reqHandlers[event].forEach((handler) => handler(...args))
+        }
+        return true
+      }),
+    }
+
+    const res = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      write: vi.fn(),
+      setHeader: vi.fn(),
+    }
+
+    // Simulate the POST request with the tools/list request
+    console.error(`Test: calling handlePostRequest`)
+    transportAny.handlePostRequest(req, res)
+
+    // Simulate the request body
+    console.error(`Test: emitting data event`)
+    req.emit("data", Buffer.from(JSON.stringify(toolsListRequest)))
+    console.error(`Test: emitting end event`)
+    req.emit("end")
+
+    // Wait for async operations
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    console.error(`Test: checking expectations`)
+
+    // Verify the tools/list response was sent synchronously
+    expect(res.end).toHaveBeenCalled()
+    expect(res.writeHead).toHaveBeenCalledWith(200)
+
+    try {
+      // Get the JSON response if it exists
+      const responseJson = JSON.parse(res.end.mock.calls[0][0])
+
+      // Verify the response structure
+      expect(responseJson.jsonrpc).toBe("2.0")
+      expect(responseJson.id).toBe(123)
+      expect(responseJson.result).toBeDefined()
+      expect(responseJson.result.tools).toBeInstanceOf(Array)
+      expect(responseJson.result.tools.length).toBe(1)
+      expect(responseJson.result.tools[0].id).toBe("test-tool-1")
+    } catch (e) {
+      console.error(`Test: Failed to parse response: ${e}`)
+      console.error(`Response end calls: ${res.end.mock.calls.length}`)
+      if (res.end.mock.calls.length > 0) {
+        console.error(`Response body: ${res.end.mock.calls[0][0]}`)
+      }
+      throw e
+    }
   })
 })
 
@@ -596,4 +848,19 @@ function createMockResponse() {
     setHeader: vi.fn(),
     on: vi.fn(),
   }
+}
+
+function createMockRequest(method: string, headers: Record<string, string>) {
+  const req = {
+    url: "/mcp",
+    method: method,
+    headers: headers,
+    on: vi.fn(),
+    emit: vi.fn(),
+  }
+
+  // Set up the mock implementation to return req
+  req.on.mockImplementation(() => req)
+
+  return req
 }

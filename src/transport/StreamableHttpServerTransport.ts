@@ -131,39 +131,85 @@ export class StreamableHttpServerTransport implements Transport {
    * @param message JSON-RPC message
    */
   async send(message: JSONRPCMessage): Promise<void> {
+    console.error(`StreamableHttpServerTransport: Sending message: ${JSON.stringify(message)}`)
     let targetSessionId: string | undefined
+    let messageIdForThisResponse: string | number | null = null
 
-    // If this is a response, find the session that sent the original request
     if (isJSONRPCResponse(message) && message.id !== null) {
-      targetSessionId = this.requestSessionMap.get(message.id)
-      // Once we've sent the response, we can remove the mapping
-      if (targetSessionId) {
-        this.requestSessionMap.delete(message.id)
+      messageIdForThisResponse = message.id
+      targetSessionId = this.requestSessionMap.get(messageIdForThisResponse)
+      console.error(
+        `StreamableHttpServerTransport: Potential target session for response ID ${messageIdForThisResponse}: ${targetSessionId}`,
+      )
+
+      if (targetSessionId && this.initResponseHandlers.has(targetSessionId)) {
+        console.error(
+          `StreamableHttpServerTransport: Session ${targetSessionId} has initResponseHandlers. Invoking them for message ID ${messageIdForThisResponse}.`,
+        )
+        const handlers = this.initResponseHandlers.get(targetSessionId)!
+        // Clone to safely iterate if handlers modify the collection (though removeInitResponseHandler handles this)
+        ;[...handlers].forEach((handler) => handler(message))
+
+        // If the request ID is no longer in the map, an initResponseHandler handled it (and removed it).
+        if (!this.requestSessionMap.has(messageIdForThisResponse)) {
+          console.error(
+            `StreamableHttpServerTransport: Response for ID ${messageIdForThisResponse} was handled by an initResponseHandler (e.g., synchronous POST response for initialize or tools/list).`,
+          )
+          return // Exit, as response was sent on POST by the handler.
+        } else {
+          console.error(
+            `StreamableHttpServerTransport: Response for ID ${messageIdForThisResponse} was NOT exclusively handled by an initResponseHandler or handler did not remove from requestSessionMap. Proceeding to GET stream / broadcast if applicable.`,
+          )
+        }
+      }
+
+      // If not handled by a synchronous initResponseHandler (like for initialize or tools/list),
+      // or if the message is of a type that should always go to the stream after initial handling,
+      // ensure the request ID is removed from the map as we are about to process it for streaming or completion.
+      // This applies to standard request-responses that go to the GET stream.
+      if (this.requestSessionMap.has(messageIdForThisResponse)) {
+        console.error(
+          `StreamableHttpServerTransport: Deleting request ID ${messageIdForThisResponse} from requestSessionMap as it's being processed for GET stream or broadcast.`,
+        )
+        this.requestSessionMap.delete(messageIdForThisResponse)
       }
     }
 
-    // If we couldn't find a target session or this is a notification without an ID
-    // we need to determine which session should receive it based on context
-    // For demo purposes, if no target found, fallback to broadcast with a warning
+    // Standard logic for sending to GET stream or broadcasting notifications.
+    // This block is reached if:
+    // 1. It's a notification (messageIdForThisResponse is null, targetSessionId is undefined).
+    // 2. It's a response that was NOT handled by an initResponseHandler (e.g. standard tool_call response).
     if (!targetSessionId) {
-      const messageId = isJSONRPCResponse(message) || isJSONRPCRequest(message) ? message.id : null
+      const idForLog =
+        messageIdForThisResponse !== null
+          ? messageIdForThisResponse
+          : isJSONRPCRequest(message)
+            ? message.id
+            : "N/A"
       console.warn(
-        `No target session found for message${messageId ? ` ID: ${String(messageId)}` : " (notification)"}.`,
+        `StreamableHttpServerTransport: No specific target session for message (ID: ${idForLog}). Broadcasting to all applicable sessions.`,
       )
-
-      // Broadcast to all initialized sessions (fallback behavior)
-      for (const [sessionId, session] of this.sessions.entries()) {
+      for (const [sid, session] of this.sessions.entries()) {
         if (session.initialized && session.activeResponses.size > 0) {
-          this.sendMessageToSession(sessionId, session, message)
+          this.sendMessageToSession(sid, session, message)
         }
       }
       return
     }
 
-    // Send to the specific target session
+    // If targetSessionId is known (it's a response to a request that was not handled synchronously by initResponseHandler)
     const session = this.sessions.get(targetSessionId)
     if (session && session.activeResponses.size > 0) {
+      console.error(
+        `StreamableHttpServerTransport: Sending message (ID: ${messageIdForThisResponse}) to GET stream for session ${targetSessionId} (${session.activeResponses.size} active connections).`,
+      )
       this.sendMessageToSession(targetSessionId, session, message)
+    } else if (targetSessionId) {
+      // This case means a response was generated for a session, it wasn't handled by initResponseHandlers,
+      // but the session has no active GET connections. The message might be lost for the client.
+      console.error(
+        `StreamableHttpServerTransport: No active GET connections for session ${targetSessionId} to send message (ID: ${messageIdForThisResponse}). Message might not be delivered if not handled by POST.`,
+      )
     }
   }
 
@@ -330,11 +376,11 @@ export class StreamableHttpServerTransport implements Transport {
         // Parse JSON-RPC message
         const message = JSON.parse(body) as JSONRPCMessage
 
-        // Handle initialization request
+        // Handle initialization request (synchronous response on POST)
         if (isInitializeRequest(message)) {
           this.handleInitializeRequest(message, req, res)
-        } else {
-          // Handle regular request - check session
+        } else if (isJSONRPCRequest(message) && message.method === "tools/list") {
+          // Synchronous response for tools/list similar to initialize
           const sessionId = req.headers["mcp-session-id"] as string
 
           if (!sessionId || !this.sessions.has(sessionId)) {
@@ -354,31 +400,90 @@ export class StreamableHttpServerTransport implements Transport {
 
           const session = this.sessions.get(sessionId)!
 
-          // For requests, wait for response through the message handler
+          // Store mapping for this request
+          if (message.id !== undefined && message.id !== null) {
+            this.requestSessionMap.set(message.id, sessionId)
+            if (!session.pendingRequests) {
+              session.pendingRequests = new Set()
+            }
+            session.pendingRequests.add(message.id)
+          }
+
+          // Prepare response handler that will send the actual tools/list response on this POST
+          const responseHandler = (responseMessage: JSONRPCMessage) => {
+            if (isJSONRPCResponse(responseMessage) && responseMessage.id === message.id) {
+              res.setHeader("Content-Type", "application/json")
+              res.writeHead(200)
+              res.end(JSON.stringify(responseMessage))
+
+              // Clean up mappings and handlers
+              this.removeInitResponseHandler(sessionId, responseHandler)
+              if (message.id !== undefined && message.id !== null) {
+                this.requestSessionMap.delete(message.id)
+                session.pendingRequests.delete(message.id)
+              }
+            }
+          }
+
+          this.addInitResponseHandler(sessionId, responseHandler)
+
+          // Forward the request to the protocol layer
+          if (session.messageHandler) {
+            session.messageHandler(message)
+          } else {
+            // No message handler, respond with error
+            this.removeInitResponseHandler(sessionId, responseHandler)
+            res.writeHead(500)
+            res.end(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                error: {
+                  code: -32603,
+                  message: "Internal error: No message handler available",
+                },
+                id: "id" in message ? message.id : null,
+              }),
+            )
+          }
+        } else {
+          // Handle regular requests (asynchronous - 202 on POST, response on GET stream)
+          const sessionId = req.headers["mcp-session-id"] as string
+
+          if (!sessionId || !this.sessions.has(sessionId)) {
+            res.writeHead(400)
+            res.end(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                error: {
+                  code: -32000,
+                  message: "Invalid session. A valid Mcp-Session-Id header is required.",
+                },
+                id: "id" in message ? message.id : null,
+              }),
+            )
+            return
+          }
+
+          const session = this.sessions.get(sessionId)!
+
           if (isJSONRPCRequest(message)) {
             if (session.messageHandler) {
-              // Store the mapping between the request ID and session ID
               if (message.id !== undefined && message.id !== null) {
                 this.requestSessionMap.set(message.id, sessionId)
-                // Also track this request in the session
                 if (!session.pendingRequests) {
                   session.pendingRequests = new Set()
                 }
                 session.pendingRequests.add(message.id)
               }
-
-              session.messageHandler(message)
-
-              // For requests from client, respond with immediate 202 Accepted
-              // The actual response will be sent via the streaming GET connection
-              res.writeHead(202)
+              session.messageHandler(message) // Pass to protocol layer
+              res.writeHead(202) // Respond 202 Accepted
               res.end()
             }
           } else {
-            // For notifications (no id), just process and acknowledge
+            // Notification
             if (session.messageHandler) {
               session.messageHandler(message)
-              res.writeHead(202)
+              res.writeHead(202) // Acknowledge notification
               res.end()
             }
           }
@@ -420,7 +525,6 @@ export class StreamableHttpServerTransport implements Transport {
   ): void {
     // Generate new session
     const sessionId = randomUUID()
-
     // Create session
     this.sessions.set(sessionId, {
       // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -439,37 +543,35 @@ export class StreamableHttpServerTransport implements Transport {
     res.setHeader("Content-Type", "application/json")
     res.setHeader("Mcp-Session-Id", sessionId)
 
-    // Pass to message handler
+    // Create a handler to capture the initialize response from the Protocol layer
+    const responseHandler = (responseMessage: JSONRPCMessage) => {
+      // Initialize responses should always be JSON-RPC responses with a result
+      if (
+        isJSONRPCResponse(responseMessage) &&
+        "id" in message &&
+        responseMessage.id === message.id
+      ) {
+        // Send the actual response that includes the server's capabilities
+        res.writeHead(200)
+        res.end(JSON.stringify(responseMessage))
+
+        // Remove this one-time handler
+        this.removeInitResponseHandler(sessionId, responseHandler)
+
+        // Since we're handling the initialize response specially, remove it from the session mapping
+        this.requestSessionMap.delete(message.id as string | number)
+      }
+    }
+
+    // Add this response handler to the session
+    this.addInitResponseHandler(sessionId, responseHandler)
+
+    // Pass to message handler to let the Protocol layer process it
     if (this.onmessage) {
       this.onmessage(message)
-
-      // For initialization requests, we need to immediately send a success response
-      // with status code 200 and the Mcp-Session-Id header
-      if ("id" in message && message.id !== null && message.id !== undefined) {
-        // Generate a basic success response according to the protocol
-        const response = {
-          jsonrpc: "2.0",
-          id: message.id,
-          result: {
-            protocolVersion: "2025-03-26",
-            serverInfo: {
-              name: "mcp-openapi-server",
-              version: "1.0.0",
-            },
-            capabilities: {},
-          },
-        }
-
-        res.writeHead(200)
-        res.end(JSON.stringify(response))
-      } else {
-        // In case there's no ID (which shouldn't happen for init requests),
-        // respond with a generic 200
-        res.writeHead(200)
-        res.end()
-      }
     } else {
       // No message handler, respond with an error
+      this.removeInitResponseHandler(sessionId, responseHandler)
       res.writeHead(500)
       res.end(
         JSON.stringify({
@@ -481,6 +583,37 @@ export class StreamableHttpServerTransport implements Transport {
           id: "id" in message ? message.id : null,
         }),
       )
+    }
+  }
+
+  /**
+   * Add initialize response handler
+   */
+  private initResponseHandlers: Map<string, ((message: JSONRPCMessage) => void)[]> = new Map()
+
+  private addInitResponseHandler(
+    sessionId: string,
+    handler: (message: JSONRPCMessage) => void,
+  ): void {
+    if (!this.initResponseHandlers.has(sessionId)) {
+      this.initResponseHandlers.set(sessionId, [])
+    }
+    this.initResponseHandlers.get(sessionId)!.push(handler)
+  }
+
+  private removeInitResponseHandler(
+    sessionId: string,
+    handler: (message: JSONRPCMessage) => void,
+  ): void {
+    if (this.initResponseHandlers.has(sessionId)) {
+      const handlers = this.initResponseHandlers.get(sessionId)!
+      const index = handlers.indexOf(handler)
+      if (index !== -1) {
+        handlers.splice(index, 1)
+      }
+      if (handlers.length === 0) {
+        this.initResponseHandlers.delete(sessionId)
+      }
     }
   }
 

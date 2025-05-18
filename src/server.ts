@@ -18,7 +18,10 @@ export class OpenAPIServer {
       { name: config.name, version: config.version },
       {
         capabilities: {
-          tools: {},
+          tools: {
+            list: true,
+            execute: true,
+          },
         },
       },
     )
