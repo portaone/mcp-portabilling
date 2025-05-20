@@ -4,6 +4,7 @@ import { readFile } from "fs/promises"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
 import crypto from "crypto"
+import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
 
 /**
  * Class to load and parse OpenAPI specifications
@@ -137,100 +138,16 @@ export class OpenAPISpecLoader {
 
     if (currentName.length === 0) return "tool-" + this.generateShortHash(originalId, 8)
 
-    const revisedCommonWordsToRemove = [
-      "controller",
-      "api",
-      "operation",
-      "handler",
-      "endpoint",
-      "action",
-      "perform",
-      "execute",
-      "retrieve",
-      "specify", // generic verbs
-      "for",
-      "and",
-      "the",
-      "with",
-      "from",
-      "into",
-      "onto",
-      "out", // prepositions/articles
-      // "service", "method" are kept as they can be part of specific abbreviations or semantics.
-      // Verbs like get, set, list, update, create, delete should be handled by abbreviation map.
-    ]
-    const wordAbbreviations: Record<string, string> = {
-      service: "Svc",
-      services: "Svcs",
-      user: "Usr",
-      users: "Usrs",
-      management: "Mgmt",
-      manager: "Mgr",
-      manage: "Mng",
-      authority: "Auth",
-      authorities: "Auths",
-      group: "Grp",
-      groups: "Grps",
-      update: "Upd",
-      updating: "Upd",
-      updated: "Upd",
-      delete: "Del",
-      deleting: "Del",
-      deleted: "Del",
-      create: "Crt",
-      creating: "Crt",
-      created: "Crt",
-      get: "Get",
-      getting: "Get",
-      list: "Lst",
-      listing: "Lst",
-      post: "Pst",
-      put: "Put",
-      patch: "Ptch",
-      request: "Req",
-      response: "Resp",
-      parameter: "Param",
-      parameters: "Params",
-      config: "Cfg",
-      configuration: "Config",
-      configure: "Cfg",
-      resource: "Res",
-      resources: "Resrcs",
-      identity: "Id",
-      identifier: "Id",
-      identification: "Id",
-      identifiers: "Ids",
-      application: "App",
-      account: "Acct",
-      information: "Info",
-      notification: "Notif",
-      description: "Desc",
-      summary: "Summ",
-      version: "Ver",
-      value: "Val",
-      values: "Vals",
-      authentication: "Authn",
-      authorization: "Authz",
-      specification: "Spec",
-      document: "Doc",
-      documents: "Docs",
-      repository: "Repo",
-      repositories: "Repos",
-      experimental: "Exp",
-      deprecated: "Depr",
-      query: "Qry",
-    }
-
     let parts = this.splitCombined(currentName) // splitCombined handles underscores and camelCase
 
     // 1. Remove common words (case-insensitive)
-    parts = parts.filter((part) => !revisedCommonWordsToRemove.includes(part.toLowerCase()))
+    parts = parts.filter((part) => !REVISED_COMMON_WORDS_TO_REMOVE.includes(part.toLowerCase()))
 
     // 2. Apply abbreviations (case-insensitive for matching, try to preserve case)
     parts = parts.map((part) => {
       const lowerPart = part.toLowerCase()
-      if (wordAbbreviations[lowerPart]) {
-        const abbr = wordAbbreviations[lowerPart]
+      if (WORD_ABBREVIATIONS[lowerPart]) {
+        const abbr = WORD_ABBREVIATIONS[lowerPart]
         if (
           part.length > 0 &&
           part[0] === part[0].toUpperCase() &&
@@ -257,7 +174,7 @@ export class OpenAPISpecLoader {
     if (currentName.length > maxLength) {
       const currentParts = currentName.split("-")
       const newParts = currentParts.map((part) => {
-        const isAbbreviation = Object.values(wordAbbreviations).some(
+        const isAbbreviation = Object.values(WORD_ABBREVIATIONS).some(
           (abbr) => abbr.toLowerCase() === part.toLowerCase(),
         )
         // More aggressive vowel removal for non-abbreviated words if part is somewhat long
