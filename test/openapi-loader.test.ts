@@ -3,7 +3,6 @@ import { readFile } from "fs/promises"
 import { OpenAPISpecLoader } from "../src/openapi-loader"
 import { OpenAPIV3 } from "openapi-types"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
-// import type * as JsYamlType from 'js-yaml'; // No longer using direct type import here
 
 // Mock dependencies
 vi.mock("fs/promises")
