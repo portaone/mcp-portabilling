@@ -3,9 +3,39 @@ import { readFile } from "fs/promises"
 import { OpenAPISpecLoader } from "../src/openapi-loader"
 import { OpenAPIV3 } from "openapi-types"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
+// import type * as JsYamlType from 'js-yaml'; // No longer using direct type import here
 
 // Mock dependencies
 vi.mock("fs/promises")
+
+vi.mock("js-yaml", async () => {
+  const actualJsYamlMod = await vi.importActual<typeof import("js-yaml")>("js-yaml")
+
+  // The SUT (System Under Test) uses "import yaml from 'js-yaml'",
+  // which means it expects 'js-yaml' to have a default export.
+  // The mocked 'load' function for this default export should call the actual 'load' from js-yaml.
+  // According to @types/js-yaml, the 'load' function is a direct export of the module.
+  const realLoadFn = actualJsYamlMod.load
+
+  if (typeof realLoadFn !== "function") {
+    // This would be unexpected if @types/js-yaml is correct and js-yaml is installed.
+    console.error(
+      "Vitest mock issue: js-yaml .load function not found on actualJsYamlMod as per types.",
+      actualJsYamlMod,
+    )
+    throw new Error("Vitest mock setup: actualJsYamlMod.load is not a function")
+  }
+
+  return {
+    default: {
+      load: vi.fn((content: string) => realLoadFn(content)),
+    },
+    // Provide other exports as well, consistent with the actual module, in case they are ever used.
+    load: vi.fn((content: string) => realLoadFn(content)),
+    // safeLoad: vi.fn((content: string) => actualJsYamlMod.safeLoad(content)), // Temporarily remove if causing type issues
+    // Add other js-yaml exports if necessary for full fidelity, though 'load' is the key one here.
+  }
+})
 
 // Mock fetch globally for tests that might use it
 global.fetch = vi.fn()
@@ -89,7 +119,7 @@ describe("OpenAPISpecLoader", () => {
       expect(result).toEqual(mockOpenAPISpec)
     })
 
-    it("should load spec from local file", async () => {
+    it("should load spec from local file (JSON)", async () => {
       const filePath = "./api-spec.json"
       const fileContent = JSON.stringify(mockOpenAPISpec)
       vi.mocked(readFile).mockResolvedValueOnce(fileContent)
@@ -98,6 +128,52 @@ describe("OpenAPISpecLoader", () => {
 
       expect(readFile).toHaveBeenCalledWith(filePath, "utf-8")
       expect(result).toEqual(mockOpenAPISpec)
+    })
+
+    it("should load spec from local file (YAML)", async () => {
+      const filePath = "./api-spec.yaml"
+      const yamlContent = `
+openapi: 3.0.0
+info:
+  title: Test API YAML
+  version: 1.0.0
+paths:
+  /test:
+    get:
+      summary: Test YAML endpoint
+      responses:
+        '200':
+          description: Successful response
+`
+      const expectedSpecObject = {
+        openapi: "3.0.0",
+        info: {
+          title: "Test API YAML",
+          version: "1.0.0",
+        },
+        paths: {
+          "/test": {
+            get: {
+              summary: "Test YAML endpoint",
+              responses: {
+                "200": {
+                  description: "Successful response",
+                },
+              },
+            },
+          },
+        },
+      }
+
+      vi.mocked(readFile).mockResolvedValueOnce(yamlContent)
+      // No need to mock yaml.load specifically if we're testing the flow
+      // that tries JSON first then falls back to YAML.
+      // If JSON.parse throws, yaml.load should be called.
+
+      const result = await openAPILoader.loadOpenAPISpec(filePath)
+
+      expect(readFile).toHaveBeenCalledWith(filePath, "utf-8")
+      expect(result).toEqual(expectedSpecObject)
     })
 
     it("should throw error if file reading fails", async () => {
