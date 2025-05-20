@@ -127,19 +127,29 @@ export class OpenAPISpecLoader {
     return combinedParts.map((p) => p.trim()).filter((p) => p.length > 0)
   }
 
-  // Function to abbreviate operationId or summary
-  public abbreviateOperationId(originalId: string, maxLength: number = 64): string {
-    if (!originalId || originalId.trim().length === 0) return "unnamed-tool"
+  private _initialSanitizeAndValidate(
+    originalId: string,
+    maxLength: number,
+  ): { currentName: string; originalWasLong: boolean; errorName?: string } {
+    if (!originalId || originalId.trim().length === 0)
+      return { currentName: "", originalWasLong: false, errorName: "unnamed-tool" }
 
     const originalWasLong = originalId.length > maxLength
-
-    // Initial sanitization to allow underscores for splitting, then they'll be handled.
     let currentName = originalId.replace(/[^a-zA-Z0-9_]/g, "-")
     currentName = currentName.replace(/-+/g, "-").replace(/^-+|-+$/g, "")
 
-    if (currentName.length === 0) return "tool-" + this.generateShortHash(originalId, 8)
+    if (currentName.length === 0)
+      return {
+        currentName: "",
+        originalWasLong,
+        errorName: "tool-" + this.generateShortHash(originalId, 8),
+      }
 
-    let parts = this.splitCombined(currentName)
+    return { currentName, originalWasLong }
+  }
+
+  private _performSemanticAbbreviation(name: string): string {
+    let parts = this.splitCombined(name)
     parts = parts.filter((part) => {
       const cleanPartForCheck = part.toLowerCase().replace(/-+$/, "")
       return !REVISED_COMMON_WORDS_TO_REMOVE.includes(cleanPartForCheck)
@@ -164,9 +174,11 @@ export class OpenAPISpecLoader {
       }
       return part
     })
+    return parts.join("-")
+  }
 
-    currentName = parts.join("-")
-
+  private _applyVowelRemovalIfOverLength(name: string, maxLength: number): string {
+    let currentName = name
     if (currentName.length > maxLength) {
       const currentParts = currentName.split("-")
       const newParts = currentParts.map((part) => {
@@ -181,8 +193,17 @@ export class OpenAPISpecLoader {
       })
       currentName = newParts.join("-")
     }
+    return currentName
+  }
 
-    currentName = currentName.replace(/-+/g, "-").replace(/^-+|-+$/g, "")
+  private _truncateAndApplyHashIfNeeded(
+    name: string,
+    originalId: string,
+    originalWasLong: boolean,
+    maxLength: number,
+  ): string {
+    let currentName = name
+    currentName = currentName.replace(/-+/g, "-").replace(/^-+|-+$/g, "") // Consolidate hyphens before length check for hashing
 
     const needsHash = originalWasLong || currentName.length > maxLength
 
@@ -192,12 +213,15 @@ export class OpenAPISpecLoader {
 
       if (currentName.length > maxLengthForBase) {
         currentName = currentName.substring(0, maxLengthForBase)
-        currentName = currentName.replace(/-+$/, "") // Remove trailing hyphen if substring created one
+        currentName = currentName.replace(/-+$/, "")
       }
       currentName = currentName + "-" + hash
     }
+    return currentName
+  }
 
-    let finalName = currentName.toLowerCase()
+  private _finalizeNameFormatting(name: string, originalId: string, maxLength: number): string {
+    let finalName = name.toLowerCase()
     finalName = finalName
       .replace(/[^a-z0-9-]/g, "-")
       .replace(/-+/g, "-")
@@ -211,5 +235,26 @@ export class OpenAPISpecLoader {
       return "tool-" + this.generateShortHash(originalId, 8)
     }
     return finalName
+  }
+
+  public abbreviateOperationId(originalId: string, maxLength: number = 64): string {
+    const {
+      currentName: sanitizedName,
+      originalWasLong,
+      errorName,
+    } = this._initialSanitizeAndValidate(originalId, maxLength)
+    if (errorName) return errorName
+
+    let processedName = this._performSemanticAbbreviation(sanitizedName)
+    processedName = this._applyVowelRemovalIfOverLength(processedName, maxLength)
+    processedName = this._truncateAndApplyHashIfNeeded(
+      processedName,
+      originalId,
+      originalWasLong,
+      maxLength,
+    )
+    processedName = this._finalizeNameFormatting(processedName, originalId, maxLength)
+
+    return processedName
   }
 }
