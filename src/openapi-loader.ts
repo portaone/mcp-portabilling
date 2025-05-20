@@ -131,21 +131,20 @@ export class OpenAPISpecLoader {
   public abbreviateOperationId(originalId: string, maxLength: number = 64): string {
     if (!originalId || originalId.trim().length === 0) return "unnamed-tool"
 
+    const originalWasLong = originalId.length > maxLength
+
     // Initial sanitization to allow underscores for splitting, then they'll be handled.
-    let currentName = originalId.replace(/[^a-zA-Z0-9_]/g, "-") // Allow underscore for now
+    let currentName = originalId.replace(/[^a-zA-Z0-9_]/g, "-")
     currentName = currentName.replace(/-+/g, "-").replace(/^-+|-+$/g, "")
 
     if (currentName.length === 0) return "tool-" + this.generateShortHash(originalId, 8)
 
-    let parts = this.splitCombined(currentName) // splitCombined handles underscores and camelCase
-
-    // 1. Remove common words (case-insensitive)
+    let parts = this.splitCombined(currentName)
     parts = parts.filter((part) => {
-      const cleanPartForCheck = part.toLowerCase().replace(/-+$/, "") // Clean trailing hyphens for check
+      const cleanPartForCheck = part.toLowerCase().replace(/-+$/, "")
       return !REVISED_COMMON_WORDS_TO_REMOVE.includes(cleanPartForCheck)
     })
 
-    // 2. Apply abbreviations (case-insensitive for matching, try to preserve case)
     parts = parts.map((part) => {
       const lowerPart = part.toLowerCase()
       if (WORD_ABBREVIATIONS[lowerPart]) {
@@ -155,13 +154,10 @@ export class OpenAPISpecLoader {
           part[0] === part[0].toUpperCase() &&
           part.slice(1) === part.slice(1).toLowerCase()
         ) {
-          // TitleCase
           return abbr[0].toUpperCase() + abbr.substring(1).toLowerCase()
         } else if (part === part.toUpperCase() && part.length > 1 && abbr.length > 1) {
-          // ALLCAPS
           return abbr.toUpperCase()
         } else if (part.length > 0 && part[0] === part[0].toUpperCase()) {
-          // First letter cap
           return abbr[0].toUpperCase() + abbr.substring(1).toLowerCase()
         }
         return abbr.toLowerCase()
@@ -171,15 +167,12 @@ export class OpenAPISpecLoader {
 
     currentName = parts.join("-")
 
-    // 3. Vowel removal from longer words if currentName is still too long
-    // Only apply if the full abbreviated name is still over budget
     if (currentName.length > maxLength) {
       const currentParts = currentName.split("-")
       const newParts = currentParts.map((part) => {
         const isAbbreviation = Object.values(WORD_ABBREVIATIONS).some(
           (abbr) => abbr.toLowerCase() === part.toLowerCase(),
         )
-        // More aggressive vowel removal for non-abbreviated words if part is somewhat long
         if (part.length > 5 && !isAbbreviation) {
           const newPart = part[0] + part.substring(1).replace(/[aeiouAEIOU]/g, "")
           if (newPart.length < part.length && newPart.length > 1) return newPart
@@ -189,41 +182,34 @@ export class OpenAPISpecLoader {
       currentName = newParts.join("-")
     }
 
-    // Consolidate hyphens and remove leading/trailing ones created by joins/abbreviations
     currentName = currentName.replace(/-+/g, "-").replace(/^-+|-+$/g, "")
 
-    // 4. Truncate and hash if still too long
-    if (currentName.length > maxLength) {
-      const hash = this.generateShortHash(originalId, 4) // Using originalId for stable hash
-      const availableLength = maxLength - hash.length - 1 // -1 for the hyphen separator
+    const needsHash = originalWasLong || currentName.length > maxLength
 
-      let truncatedBase = currentName.substring(0, availableLength)
-      // Ensure truncatedBase does not end with a hyphen
-      if (truncatedBase.endsWith("-")) {
-        truncatedBase = truncatedBase.substring(0, truncatedBase.length - 1)
+    if (needsHash) {
+      const hash = this.generateShortHash(originalId, 4)
+      const maxLengthForBase = maxLength - hash.length - 1
+
+      if (currentName.length > maxLengthForBase) {
+        currentName = currentName.substring(0, maxLengthForBase)
+        currentName = currentName.replace(/-+$/, "") // Remove trailing hyphen if substring created one
       }
-      currentName = truncatedBase + "-" + hash
+      currentName = currentName + "-" + hash
     }
 
-    // Final aggressive sanitization: only a-z, 0-9, and single hyphens. Also lowercase.
     let finalName = currentName.toLowerCase()
     finalName = finalName
-      .replace(/[^a-z0-9-]/g, "-") // Replace any remaining non-allowed char with hyphen
+      .replace(/[^a-z0-9-]/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "")
 
-    // Final length check after all transformations
     if (finalName.length > maxLength) {
       finalName = finalName.substring(0, maxLength)
-      if (finalName.endsWith("-")) {
-        finalName = finalName.substring(0, finalName.length - 1)
-      }
+      finalName = finalName.replace(/-+$/, "")
     }
-    // If all processing results in an empty string, return a hash-based name
     if (finalName.length === 0) {
       return "tool-" + this.generateShortHash(originalId, 8)
     }
-
     return finalName
   }
 }

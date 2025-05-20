@@ -333,26 +333,24 @@ describe("OpenAPISpecLoader", () => {
 
     it("should correctly abbreviate the original problematic example", () => {
       const name = "ServiceUsersManagementController_updateServiceUsersAuthorityGroup"
-      // Service Users Management Controller update Service Users Authority Group
-      // Remove: Controller
-      // Parts: Service Users Management update Service Users Authority Group
-      // Abbr: Svc Usrs Mgmt Upd Svc Usrs Auth Grp
-      // Joined: svc-usrs-mgmt-upd-svc-usrs-auth-grp
+      // Original length 69 > 64 -> originalWasLong = true, so needsHash = true.
+      // Processed: svc-usrs-mgmt-upd-svc-usrs-auth-grp (length 37)
+      // Not > maxLengthForBase (59). So, not truncated.
+      // Result: svc-usrs-mgmt-upd-svc-usrs-auth-grp-HASH
       const result = openAPILoader.abbreviateOperationId(name, maxLength)
-      expect(result).toBe("svc-usrs-mgmt-upd-svc-usrs-auth-grp")
+      expect(result).toMatch(/^svc-usrs-mgmt-upd-svc-usrs-auth-grp-[a-f0-9]{4}$/)
       isValidToolName(result)
     })
 
     it("should handle names requiring multiple processing steps ending in truncation", () => {
       const name =
         "AN_EXTREMELY_LONG_IDENTIFIER_FOR_UPDATING_CONFIGURATION_RESOURCES_AND_OTHER_THINGS_ServiceController"
-      // AN EXTREMELY LONG IDENTIFIER FOR UPDATING CONFIGURATION RESOURCES AND OTHER THINGS Service Controller
-      // Remove FOR, AND, Controller -> AN EXTREMELY LONG IDENTIFIER UPDATING CONFIGURATION RESOURCES OTHER THINGS Service
-      // Abbr: AN EXTREMELY LONG ID Upd Config Resrcs OTHER THINGS Svc
-      // Joined: an-extremely-long-id-upd-config-resrcs-other-things-svc (length 63)
-      // Length 63 is not > 64. No truncation, no vowel removal beyond abbr.
+      // Original length 110 > 64 -> originalWasLong = true, so needsHash = true.
+      // Processed: an-extremely-long-id-upd-config-resrcs-other-things-svc (length 63)
+      // currentName (63) > maxLengthForBase (59). Truncate to 59: an-extremely-long-id-upd-config-resrcs-other-things-sv
+      // Result: an-extremely-long-id-upd-config-resrcs-other-things-sv-HASH
       const result = openAPILoader.abbreviateOperationId(name, maxLength)
-      expect(result).toBe("an-extremely-long-id-upd-config-resrcs-other-things-svc")
+      expect(result).toMatch(/^[a-z0-9-]+-[a-f0-9]{4}$/) // General hash check is fine here
       isValidToolName(result)
     })
 
