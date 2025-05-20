@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
-import axios from "axios"
 import { readFile } from "fs/promises"
 import { OpenAPISpecLoader } from "../src/openapi-loader"
 import { OpenAPIV3 } from "openapi-types"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
 // Mock dependencies
-vi.mock("axios")
 vi.mock("fs/promises")
 
 // Mock fetch globally for tests that might use it

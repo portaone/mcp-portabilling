@@ -1,5 +1,4 @@
 import { OpenAPIV3 } from "openapi-types"
-import axios from "axios"
 import { readFile } from "fs/promises"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
