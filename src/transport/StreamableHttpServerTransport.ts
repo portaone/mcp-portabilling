@@ -410,7 +410,7 @@ export class StreamableHttpServerTransport implements Transport {
           }
 
           // Prepare response handler that will send the actual tools/list response on this POST
-          const responseHandler = (responseMessage: JSONRPCMessage) => {
+          const responseHandler = (responseMessage: JSONRPCMessage): void => {
             if (isJSONRPCResponse(responseMessage) && responseMessage.id === message.id) {
               res.setHeader("Content-Type", "application/json")
               res.writeHead(200)
@@ -544,7 +544,7 @@ export class StreamableHttpServerTransport implements Transport {
     res.setHeader("Mcp-Session-Id", sessionId)
 
     // Create a handler to capture the initialize response from the Protocol layer
-    const responseHandler = (responseMessage: JSONRPCMessage) => {
+    const responseHandler = (responseMessage: JSONRPCMessage): void => {
       // Initialize responses should always be JSON-RPC responses with a result
       if (
         isJSONRPCResponse(responseMessage) &&
