@@ -67,7 +67,6 @@ describe("OpenAPISpecLoader", () => {
   }
 
   beforeEach(() => {
-    vi.clearAllMocks()
     openAPILoader = new OpenAPISpecLoader()
   })
 
