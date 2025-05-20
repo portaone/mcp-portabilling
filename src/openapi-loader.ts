@@ -141,7 +141,10 @@ export class OpenAPISpecLoader {
     let parts = this.splitCombined(currentName) // splitCombined handles underscores and camelCase
 
     // 1. Remove common words (case-insensitive)
-    parts = parts.filter((part) => !REVISED_COMMON_WORDS_TO_REMOVE.includes(part.toLowerCase()))
+    parts = parts.filter((part) => {
+      const cleanPartForCheck = part.toLowerCase().replace(/-+$/, "") // Clean trailing hyphens for check
+      return !REVISED_COMMON_WORDS_TO_REMOVE.includes(cleanPartForCheck)
+    })
 
     // 2. Apply abbreviations (case-insensitive for matching, try to preserve case)
     parts = parts.map((part) => {
