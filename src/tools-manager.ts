@@ -15,59 +15,61 @@ export class ToolsManager {
   }
 
   /**
+   * Create dynamic discovery meta-tools
+   */
+  private createDynamicTools(): Map<string, Tool> {
+    const dynamicTools = new Map<string, Tool>()
+
+    // list_api_endpoints
+    dynamicTools.set("list_api_endpoints", {
+      name: "list_api_endpoints",
+      description: "List all available API endpoints",
+      inputSchema: { type: "object", properties: {} },
+    })
+
+    // get_api_endpoint_schema
+    dynamicTools.set("get_api_endpoint_schema", {
+      name: "get_api_endpoint_schema",
+      description: "Get the JSON schema for a specified API endpoint",
+      inputSchema: {
+        type: "object",
+        properties: {
+          endpoint: { type: "string", description: "Endpoint path (e.g. /users/{id})" },
+        },
+        required: ["endpoint"],
+      },
+    })
+
+    // invoke_api_endpoint
+    dynamicTools.set("invoke_api_endpoint", {
+      name: "invoke_api_endpoint",
+      description: "Invoke an API endpoint with provided parameters",
+      inputSchema: {
+        type: "object",
+        properties: {
+          endpoint: { type: "string", description: "Endpoint path to invoke" },
+          params: {
+            type: "object",
+            description: "Parameters for the API call",
+            properties: {},
+          },
+        },
+        required: ["endpoint"],
+      },
+    })
+
+    return dynamicTools
+  }
+
+  /**
    * Initialize tools from the OpenAPI specification
    */
   async initialize(): Promise<void> {
     const spec = await this.specLoader.loadOpenAPISpec(this.config.openApiSpec)
     // Determine tools loading mode
     if (this.config.toolsMode === "dynamic") {
-      // Dynamic discovery meta-tools
-      const dynamicTools: [string, Tool][] = []
-      // list_api_endpoints
-      dynamicTools.push([
-        "list_api_endpoints",
-        {
-          name: "list_api_endpoints",
-          description: "List all available API endpoints",
-          inputSchema: { type: "object", properties: {} },
-        },
-      ])
-      // get_api_endpoint_schema
-      dynamicTools.push([
-        "get_api_endpoint_schema",
-        {
-          name: "get_api_endpoint_schema",
-          description: "Get the JSON schema for a specified API endpoint",
-          inputSchema: {
-            type: "object",
-            properties: {
-              endpoint: { type: "string", description: "Endpoint path (e.g. /users/{id})" },
-            },
-            required: ["endpoint"],
-          },
-        },
-      ])
-      // invoke_api_endpoint
-      dynamicTools.push([
-        "invoke_api_endpoint",
-        {
-          name: "invoke_api_endpoint",
-          description: "Invoke an API endpoint with provided parameters",
-          inputSchema: {
-            type: "object",
-            properties: {
-              endpoint: { type: "string", description: "Endpoint path to invoke" },
-              params: {
-                type: "object",
-                description: "Parameters for the API call",
-                properties: {},
-              },
-            },
-            required: ["endpoint"],
-          },
-        },
-      ])
-      this.tools = new Map(dynamicTools)
+      // Use dynamic discovery meta-tools
+      this.tools = this.createDynamicTools()
       return
     }
     // Load and filter standard tools
