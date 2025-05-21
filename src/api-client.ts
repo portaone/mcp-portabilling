@@ -72,15 +72,39 @@ export class ApiClient {
 
           // If it's a path parameter, interpolate it into the URL and remove from params
           if (paramLocation === "path") {
-            resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            // Try standard OpenAPI and Express-style parameters first
+            const paramRegex = new RegExp(`\\{${key}\\}|:${key}(?:\\/|$)`, "g")
+
+            // If specific parameter style was found, use it
+            if (paramRegex.test(resolvedPath)) {
+              resolvedPath = resolvedPath.replace(
+                paramRegex,
+                (match) => encodeURIComponent(value) + (match.endsWith("/") ? "/" : ""),
+              )
+            } else {
+              // Fall back to the original simple replacement for backward compatibility
+              resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            }
             delete paramsCopy[key]
           }
         }
       } else {
         // Fallback behavior if tool definition is not available
         for (const key of Object.keys(paramsCopy)) {
-          if (resolvedPath.includes(`/${key}`)) {
-            const value = paramsCopy[key]
+          const value = paramsCopy[key]
+          // First try standard OpenAPI and Express-style parameters
+          const paramRegex = new RegExp(`\\{${key}\\}|:${key}(?:\\/|$)`, "g")
+
+          // If found, replace using regex
+          if (paramRegex.test(resolvedPath)) {
+            resolvedPath = resolvedPath.replace(
+              paramRegex,
+              (match) => encodeURIComponent(value) + (match.endsWith("/") ? "/" : ""),
+            )
+            delete paramsCopy[key]
+          }
+          // Fall back to original simple replacement for backward compatibility
+          else if (resolvedPath.includes(`/${key}`)) {
             resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
             delete paramsCopy[key]
           }

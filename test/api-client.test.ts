@@ -207,6 +207,94 @@ describe("ApiClient", () => {
         params: { query: "test", results: "json" },
       })
     })
+
+    it("should handle OpenAPI-style path parameters with curly braces", async () => {
+      // Create a mock tool with OpenAPI-style parameter in path
+      const mockTool = {
+        name: "get-user-by-id",
+        description: "Get user by ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            userId: {
+              type: "string",
+              description: "User ID",
+              "x-parameter-location": "path",
+            },
+          },
+        },
+      }
+
+      // Set up the tool in the client and mock parseToolId to return path with {userId}
+      const toolsMap = new Map()
+      toolsMap.set("GET-user-userId", mockTool)
+      apiClient.setTools(toolsMap)
+
+      // Mock the parseToolId method to return a path with curly braces format
+      const originalParseToolId = (apiClient as any).parseToolId
+      ;(apiClient as any).parseToolId = vi.fn().mockReturnValue({
+        method: "get",
+        path: "/user/{userId}",
+      })
+
+      // Execute the call
+      await apiClient.executeApiCall("GET-user-userId", { userId: "user123" })
+
+      // Verify the correct URL was constructed
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/user/user123",
+        headers: { "X-API-Key": "test-key" },
+        params: {},
+      })
+
+      // Restore original parseToolId
+      ;(apiClient as any).parseToolId = originalParseToolId
+    })
+
+    it("should handle Express-style path parameters with colon prefix", async () => {
+      // Create a mock tool with Express-style parameter in path
+      const mockTool = {
+        name: "get-user-by-id",
+        description: "Get user by ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            userId: {
+              type: "string",
+              description: "User ID",
+              "x-parameter-location": "path",
+            },
+          },
+        },
+      }
+
+      // Set up the tool in the client and mock parseToolId to return path with :userId
+      const toolsMap = new Map()
+      toolsMap.set("GET-user-userId", mockTool)
+      apiClient.setTools(toolsMap)
+
+      // Mock the parseToolId method to return a path with Express format
+      const originalParseToolId = (apiClient as any).parseToolId
+      ;(apiClient as any).parseToolId = vi.fn().mockReturnValue({
+        method: "get",
+        path: "/user/:userId",
+      })
+
+      // Execute the call
+      await apiClient.executeApiCall("GET-user-userId", { userId: "user123" })
+
+      // Verify the correct URL was constructed
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/user/user123",
+        headers: { "X-API-Key": "test-key" },
+        params: {},
+      })
+
+      // Restore original parseToolId
+      ;(apiClient as any).parseToolId = originalParseToolId
+    })
   })
 
   describe("parseToolId", () => {
