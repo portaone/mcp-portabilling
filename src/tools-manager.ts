@@ -76,41 +76,53 @@ export class ToolsManager {
     const rawTools = this.specLoader.parseOpenAPISpec(spec)
     const filtered = new Map<string, Tool>()
 
+    // Precompute lowercase filter arrays for better performance
+    const includeToolsLower = this.config.includeTools?.map((t) => t.toLowerCase()) || []
+    const includeOperationsLower =
+      this.config.includeOperations?.map((op) => op.toLowerCase()) || []
+    const includeResourcesLower = this.config.includeResources || []
+    const includeTagsLower = this.config.includeTags?.map((tag) => tag.toLowerCase()) || []
+
+    // Convert resource paths to lowercase for case-insensitive matching
+    const resourcePathsLower = includeResourcesLower.map((res) => ({
+      exact: `/${res}`.toLowerCase(),
+      prefix: `/${res}/`.toLowerCase(),
+    }))
+
     for (const [toolId, tool] of rawTools.entries()) {
       // includeTools filter
-      if (this.config.includeTools && this.config.includeTools.length > 0) {
-        const includeToolsLower = this.config.includeTools.map((t) => t.toLowerCase())
+      if (includeToolsLower.length > 0) {
+        const toolIdLower = toolId.toLowerCase()
+        const toolNameLower = tool.name.toLowerCase()
         if (
-          !includeToolsLower.includes(toolId.toLowerCase()) &&
-          !includeToolsLower.includes(tool.name.toLowerCase())
+          !includeToolsLower.includes(toolIdLower) &&
+          !includeToolsLower.includes(toolNameLower)
         ) {
           continue
         }
       }
+
       // includeOperations filter
-      if (this.config.includeOperations && this.config.includeOperations.length > 0) {
+      if (includeOperationsLower.length > 0) {
         const { method } = this.parseToolId(toolId)
-        if (
-          !this.config.includeOperations
-            .map((op) => op.toLowerCase())
-            .includes(method.toLowerCase())
-        ) {
+        if (!includeOperationsLower.includes(method.toLowerCase())) {
           continue
         }
       }
+
       // includeResources filter
-      if (this.config.includeResources && this.config.includeResources.length > 0) {
+      if (resourcePathsLower.length > 0) {
         const { path } = this.parseToolId(toolId)
         const pathLower = path.toLowerCase()
         // Match exact resource prefix (after leading slash) - case insensitive
-        const match = this.config.includeResources.some(
-          (res) =>
-            pathLower === `/${res}`.toLowerCase() || pathLower.startsWith(`/${res}/`.toLowerCase()),
+        const match = resourcePathsLower.some(
+          (res) => pathLower === res.exact || pathLower.startsWith(res.prefix),
         )
         if (!match) continue
       }
+
       // includeTags filter
-      if (this.config.includeTags && this.config.includeTags.length > 0) {
+      if (includeTagsLower.length > 0) {
         // Attempt to read tags from original spec paths
         const { method, path } = this.parseToolId(toolId)
         const methodLower = method.toLowerCase() as OpenAPIV3.HttpMethods
@@ -121,7 +133,6 @@ export class ToolsManager {
         // Get the operation for the method (get, post, etc.)
         const opObj = pathItem[methodLower]
         const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
-        const includeTagsLower = this.config.includeTags.map((tag) => tag.toLowerCase())
         if (!tags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))) continue
       }
       filtered.set(toolId, tool)
