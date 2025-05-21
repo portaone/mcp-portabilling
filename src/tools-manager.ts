@@ -1,6 +1,7 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { OpenAPISpecLoader } from "./openapi-loader"
 import { OpenAPIMCPServerConfig } from "./config"
+import { OpenAPIV3 } from "openapi-types"
 
 /**
  * Manages the tools available in the MCP server
@@ -108,8 +109,13 @@ export class ToolsManager {
       if (this.config.includeTags && this.config.includeTags.length > 0) {
         // Attempt to read tags from original spec paths
         const { method, path } = this.parseToolId(toolId)
-        // @ts-ignore: dynamic indexing of PathItemObject by method
-        const opObj: any = (spec.paths[path] as any)?.[method.toLowerCase()]
+        const methodLower = method.toLowerCase() as OpenAPIV3.HttpMethods
+        const pathItem = spec.paths[path] as OpenAPIV3.PathItemObject | undefined
+
+        if (!pathItem) continue
+
+        // Get the operation for the method (get, post, etc.)
+        const opObj = pathItem[methodLower]
         const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
         if (!tags.some((t: string) => this.config.includeTags!.includes(t))) continue
       }
