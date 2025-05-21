@@ -101,9 +101,11 @@ export class ToolsManager {
       // includeResources filter
       if (this.config.includeResources && this.config.includeResources.length > 0) {
         const { path } = this.parseToolId(toolId)
-        // Match exact resource prefix (after leading slash)
+        const pathLower = path.toLowerCase()
+        // Match exact resource prefix (after leading slash) - case insensitive
         const match = this.config.includeResources.some(
-          (res) => path === `/${res}` || path.startsWith(`/${res}/`),
+          (res) =>
+            pathLower === `/${res}`.toLowerCase() || pathLower.startsWith(`/${res}/`.toLowerCase()),
         )
         if (!match) continue
       }
