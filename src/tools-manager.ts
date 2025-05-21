@@ -72,12 +72,7 @@ export class ToolsManager {
     // Load and filter standard tools
     const rawTools = this.specLoader.parseOpenAPISpec(spec)
     const filtered = new Map<string, Tool>()
-    // Helper to parse toolId into method and path
-    const parse = (id: string) => {
-      const [method, ...parts] = id.split("-")
-      const path = "/" + parts.join("/").replace(/-/g, "/")
-      return { method: method.toLowerCase(), path }
-    }
+
     for (const [toolId, tool] of rawTools.entries()) {
       // includeTools filter
       if (this.config.includeTools && this.config.includeTools.length > 0) {
@@ -90,14 +85,18 @@ export class ToolsManager {
       }
       // includeOperations filter
       if (this.config.includeOperations && this.config.includeOperations.length > 0) {
-        const { method } = parse(toolId)
-        if (!this.config.includeOperations.map((op) => op.toLowerCase()).includes(method)) {
+        const { method } = this.parseToolId(toolId)
+        if (
+          !this.config.includeOperations
+            .map((op) => op.toLowerCase())
+            .includes(method.toLowerCase())
+        ) {
           continue
         }
       }
       // includeResources filter
       if (this.config.includeResources && this.config.includeResources.length > 0) {
-        const { path } = parse(toolId)
+        const { path } = this.parseToolId(toolId)
         // Match exact resource prefix (after leading slash)
         const match = this.config.includeResources.some(
           (res) => path === `/${res}` || path.startsWith(`/${res}/`),
@@ -107,9 +106,9 @@ export class ToolsManager {
       // includeTags filter
       if (this.config.includeTags && this.config.includeTags.length > 0) {
         // Attempt to read tags from original spec paths
-        const { method, path } = parse(toolId)
+        const { method, path } = this.parseToolId(toolId)
         // @ts-ignore: dynamic indexing of PathItemObject by method
-        const opObj: any = (spec.paths[path] as any)?.[method]
+        const opObj: any = (spec.paths[path] as any)?.[method.toLowerCase()]
         const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
         if (!tags.some((t: string) => this.config.includeTags!.includes(t))) continue
       }
