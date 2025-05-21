@@ -137,16 +137,64 @@ export class OpenAPISpecLoader {
         // Merge parameters into inputSchema
         if (op.parameters) {
           for (const param of op.parameters) {
-            // Skip refs for now
-            if (!("name" in param)) continue
+            let paramObj: OpenAPIV3.ParameterObject
 
-            const paramObj = param as OpenAPIV3.ParameterObject
+            // Handle parameter references by resolving them
+            if (!("name" in param)) {
+              // This is a reference, attempt to resolve it
+              if ("$ref" in param && typeof param.$ref === "string") {
+                const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
+                if (refMatch && spec.components?.parameters) {
+                  const paramName = refMatch[1]
+                  const resolvedParam = spec.components.parameters[paramName]
+
+                  // Skip if we can't resolve the reference
+                  if (!resolvedParam || !("name" in resolvedParam)) continue
+
+                  paramObj = resolvedParam as OpenAPIV3.ParameterObject
+                } else {
+                  continue // Skip unresolvable references
+                }
+              } else {
+                continue // Skip if not a proper $ref
+              }
+            } else {
+              paramObj = param as OpenAPIV3.ParameterObject
+            }
+
             if (paramObj.schema) {
-              const paramSchema = paramObj.schema as OpenAPIV3.SchemaObject
-              tool.inputSchema.properties![paramObj.name] = {
-                type: paramSchema.type || "string",
+              // Get the fully inlined schema with all nested references resolved
+              const paramSchema = this.inlineSchema(
+                paramObj.schema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+                spec.components?.schemas,
+                new Set<string>(),
+              )
+
+              // Create the parameter with just the essential properties first
+              const paramDef: any = {
                 description: paramObj.description || `${paramObj.name} parameter`,
               }
+
+              // Preserve the type
+              if (paramSchema.type) {
+                paramDef.type = paramSchema.type
+              } else {
+                paramDef.type = "string" // Default to string if no type specified
+              }
+
+              // Copy relevant properties from the inlined schema
+              // This preserves nested structures while avoiding type issues
+              for (const [key, value] of Object.entries(paramSchema)) {
+                // Skip the type and properties already set
+                if (key === "type" || key === "description") continue
+
+                // Copy the property
+                paramDef[key] = value
+              }
+
+              // Add the schema to the tool's input schema properties
+              tool.inputSchema.properties![paramObj.name] = paramDef
+
               if (paramObj.required === true) {
                 requiredParams.push(paramObj.name)
               }

@@ -474,6 +474,162 @@ paths:
       expect((tool.inputSchema.properties! as any).friend).toEqual({})
       expect(tool.inputSchema.required).toEqual(["name"])
     })
+
+    it("should resolve parameter references properly", () => {
+      const specWithRefParams: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/items/{id}": {
+            get: {
+              operationId: "getItemById",
+              parameters: [
+                { $ref: "#/components/parameters/IdParam" },
+                { $ref: "#/components/parameters/LimitParam" },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          parameters: {
+            IdParam: {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+              description: "Item identifier",
+            },
+            LimitParam: {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: { type: "integer" },
+              description: "Maximum number of results",
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithRefParams)
+      expect(tools.size).toBe(1)
+
+      const tool = tools.get("GET-items-id")
+      expect(tool).toBeDefined()
+
+      // Check that both referenced parameters were properly resolved
+      const properties = tool!.inputSchema.properties!
+      expect(properties).toHaveProperty("id")
+      expect(properties).toHaveProperty("limit")
+
+      // Check the details of each resolved parameter
+      expect(properties.id).toEqual({
+        type: "string",
+        description: "Item identifier",
+      })
+
+      expect(properties.limit).toEqual({
+        type: "integer",
+        description: "Maximum number of results",
+      })
+
+      // Verify that required parameters were correctly identified
+      expect(tool!.inputSchema.required).toContain("id")
+      // Check that limit isn't required (should not be in the required array)
+      const required = tool!.inputSchema.required as string[]
+      expect(required.includes("limit")).toBe(false)
+    })
+
+    it("should resolve nested references in parameters", () => {
+      const specWithNestedRefs: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/products": {
+            get: {
+              operationId: "getProducts",
+              parameters: [
+                { $ref: "#/components/parameters/FilterParam" },
+                { $ref: "#/components/parameters/PaginationParam" },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            PaginationOptions: {
+              type: "object",
+              properties: {
+                page: { type: "integer", description: "Page number", default: 1 },
+                size: { type: "integer", description: "Items per page", default: 20 },
+              },
+            },
+            FilterOptions: {
+              type: "object",
+              properties: {
+                category: { type: "string", description: "Product category" },
+                minPrice: { type: "number", description: "Minimum price" },
+              },
+            },
+          },
+          parameters: {
+            FilterParam: {
+              name: "filter",
+              in: "query",
+              required: false,
+              schema: { $ref: "#/components/schemas/FilterOptions" },
+              description: "Product filtering options",
+            },
+            PaginationParam: {
+              name: "pagination",
+              in: "query",
+              required: false,
+              schema: { $ref: "#/components/schemas/PaginationOptions" },
+              description: "Pagination options",
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithNestedRefs)
+      expect(tools.size).toBe(1)
+
+      const tool = tools.get("GET-products")
+      expect(tool).toBeDefined()
+
+      // Check that both referenced parameters were properly resolved
+      const properties = tool!.inputSchema.properties!
+      expect(properties).toHaveProperty("filter")
+      expect(properties).toHaveProperty("pagination")
+
+      // Now that we've improved the implementation, we should get fully resolved nested references
+      const filterParam = properties.filter as Record<string, any>
+      expect(filterParam.type).toBe("object")
+      expect(filterParam.description).toBe("Product filtering options")
+      // Check that nested properties are preserved
+      expect(filterParam.properties).toBeDefined()
+      expect(filterParam.properties.category).toBeDefined()
+      expect(filterParam.properties.category.type).toBe("string")
+      expect(filterParam.properties.category.description).toBe("Product category")
+      expect(filterParam.properties.minPrice).toBeDefined()
+      expect(filterParam.properties.minPrice.type).toBe("number")
+      expect(filterParam.properties.minPrice.description).toBe("Minimum price")
+
+      const paginationParam = properties.pagination as Record<string, any>
+      expect(paginationParam.type).toBe("object")
+      expect(paginationParam.description).toBe("Pagination options")
+      // Check that nested properties with defaults are preserved
+      expect(paginationParam.properties).toBeDefined()
+      expect(paginationParam.properties.page).toBeDefined()
+      expect(paginationParam.properties.page.type).toBe("integer")
+      expect(paginationParam.properties.page.default).toBe(1)
+      expect(paginationParam.properties.size).toBeDefined()
+      expect(paginationParam.properties.size.type).toBe("integer")
+      expect(paginationParam.properties.size.default).toBe(20)
+
+      // Neither parameter should be required
+      const required = tool!.inputSchema.required
+      expect(required).toBeUndefined()
+    })
   })
 
   describe("abbreviateOperationId", () => {
