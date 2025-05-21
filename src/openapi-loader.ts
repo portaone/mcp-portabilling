@@ -53,6 +53,12 @@ export class OpenAPISpecLoader {
       for (const [method, operation] of Object.entries(pathItem)) {
         if (method === "parameters" || !operation) continue
 
+        // Skip invalid HTTP methods
+        if (!["get", "post", "put", "patch", "delete", "options", "head"].includes(method.toLowerCase())) {
+          console.log(`Skipping non-HTTP method "${method}" for path ${path}`);
+          continue;
+        }
+
         const op = operation as OpenAPIV3.OperationObject
         // Create a clean tool ID by removing the leading slash and replacing special chars
         const cleanPath = path.replace(/^\//, "").replace(/\{([^}]+)\}/g, "$1")
