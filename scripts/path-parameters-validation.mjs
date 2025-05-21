@@ -31,7 +31,7 @@ function demonstratePathParameterHandling() {
       // Check each parameter to see if it's a path parameter
       for (const [key, value] of Object.entries(paramsCopy)) {
         const paramDef = paramDefs[key]
-        const paramLocation = paramDef?.location
+        const paramLocation = paramDef?.['x-parameter-location']
 
         // If it's a path parameter, interpolate it
         if (paramLocation === "path") {
