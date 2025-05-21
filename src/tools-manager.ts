@@ -20,16 +20,16 @@ export class ToolsManager {
   private createDynamicTools(): Map<string, Tool> {
     const dynamicTools = new Map<string, Tool>()
 
-    // list_api_endpoints
-    dynamicTools.set("list_api_endpoints", {
-      name: "list_api_endpoints",
+    // LIST-API-ENDPOINTS
+    dynamicTools.set("LIST-API-ENDPOINTS", {
+      name: "list-api-endpoints",
       description: "List all available API endpoints",
       inputSchema: { type: "object", properties: {} },
     })
 
-    // get_api_endpoint_schema
-    dynamicTools.set("get_api_endpoint_schema", {
-      name: "get_api_endpoint_schema",
+    // GET-API-ENDPOINT-SCHEMA
+    dynamicTools.set("GET-API-ENDPOINT-SCHEMA", {
+      name: "get-api-endpoint-schema",
       description: "Get the JSON schema for a specified API endpoint",
       inputSchema: {
         type: "object",
@@ -40,9 +40,9 @@ export class ToolsManager {
       },
     })
 
-    // invoke_api_endpoint
-    dynamicTools.set("invoke_api_endpoint", {
-      name: "invoke_api_endpoint",
+    // INVOKE-API-ENDPOINT
+    dynamicTools.set("INVOKE-API-ENDPOINT", {
+      name: "invoke-api-endpoint",
       description: "Invoke an API endpoint with provided parameters",
       inputSchema: {
         type: "object",
