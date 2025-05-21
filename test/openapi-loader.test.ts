@@ -290,6 +290,38 @@ paths:
       expect(tools.has("GET-users")).toBe(true)
     })
 
+    it("should skip non-HTTP methods in path item", () => {
+      const specWithNonHttpMethods: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/api/users": {
+            // Valid HTTP method
+            get: {
+              operationId: "getUsers",
+              responses: {},
+            },
+            // Non-HTTP method property that should be skipped
+            servers: [{ url: "https://api.example.com" }],
+            // Another non-HTTP method that should be skipped
+            summary: "Users API endpoint",
+            // Another valid HTTP method
+            post: {
+              operationId: "createUser",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithNonHttpMethods)
+      expect(tools.size).toBe(2)
+      expect(tools.has("GET-api-users")).toBe(true)
+      expect(tools.has("POST-api-users")).toBe(true)
+      // Verify non-HTTP methods aren't included
+      expect([...tools.keys()].some((key) => key.startsWith("SERVERS-"))).toBe(false)
+      expect([...tools.keys()].some((key) => key.startsWith("SUMMARY-"))).toBe(false)
+    })
+
     // New tests for Input Schema Composition and $ref inlining
     it("should merge primitive request bodies into a 'body' property and mark required", () => {
       const spec: OpenAPIV3.Document = {
