@@ -11,6 +11,8 @@ export class ToolsManager {
   private specLoader: OpenAPISpecLoader
 
   constructor(private config: OpenAPIMCPServerConfig) {
+    // Ensure toolsMode has a default value of 'all'
+    this.config.toolsMode = this.config.toolsMode || "all"
     this.specLoader = new OpenAPISpecLoader()
   }
 
