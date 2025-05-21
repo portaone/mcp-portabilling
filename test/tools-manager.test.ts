@@ -61,9 +61,9 @@ describe("ToolsManager", () => {
       expect(mockSpecLoader.parseOpenAPISpec).not.toHaveBeenCalled()
       const tools = toolsManager.getAllTools().map((t) => t.name)
       expect(tools).toEqual([
-        "list_api_endpoints",
-        "get_api_endpoint_schema",
-        "invoke_api_endpoint",
+        "list-api-endpoints",
+        "get-api-endpoint-schema",
+        "invoke-api-endpoint",
       ])
     })
 
