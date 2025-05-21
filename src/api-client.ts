@@ -33,20 +33,32 @@ export class ApiClient {
       // Parse method and path from the tool ID
       const { method, path } = this.parseToolId(toolId)
 
+      // Interpolate path parameters into the URL and remove them from params
+      const paramsCopy: Record<string, any> = { ...params }
+      let resolvedPath = path
+      for (const key of Object.keys(paramsCopy)) {
+        if (resolvedPath.includes(`/${key}`)) {
+          const value = paramsCopy[key]
+          // Replace segment and encode value
+          resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+          delete paramsCopy[key]
+        }
+      }
+
       // Prepare request configuration
       const config: any = {
         method: method.toLowerCase(),
-        url: path,
+        url: resolvedPath,
         headers: this.headers,
       }
 
       // Handle parameters based on HTTP method
       if (["get", "delete", "head", "options"].includes(method.toLowerCase())) {
         // For GET-like methods, parameters go in the query string
-        config.params = this.processQueryParams(params)
+        config.params = this.processQueryParams(paramsCopy)
       } else {
         // For POST-like methods, parameters go in the request body
-        config.data = params
+        config.data = paramsCopy
       }
 
       // Execute the request
