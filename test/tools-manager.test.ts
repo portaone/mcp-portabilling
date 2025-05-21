@@ -146,7 +146,7 @@ describe("ToolsManager", () => {
     })
   })
 
-  describe("getAllTools", () => {
+  describe("getAllTools - return all tools", () => {
     it("should return all tools", async () => {
       const mockTools = new Map([
         ["GET-users", { name: "List Users" } as Tool],
