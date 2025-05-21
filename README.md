@@ -144,7 +144,7 @@ npx @ivotoby/openapi-mcp-server \
 
 ### OpenAPI Schema Processing
 
-### Reference Resolution
+#### Reference Resolution
 
 This MCP server implements robust OpenAPI reference (`$ref`) resolution to ensure accurate representation of API schemas:
 
