@@ -109,6 +109,104 @@ describe("ApiClient", () => {
         params: { filter: "all" },
       })
     })
+
+    it("should handle multiple path parameters correctly", async () => {
+      await apiClient.executeApiCall("GET-store-order-orderId-item-itemId", {
+        orderId: 123,
+        itemId: 456,
+        format: "json",
+      })
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/store/order/123/item/456",
+        headers: { "X-API-Key": "test-key" },
+        params: { format: "json" },
+      })
+    })
+
+    it("should respect parameter location from OpenAPI spec when available", async () => {
+      // Create a mock tool definition with proper OpenAPI parameter locations
+      const mockTool = {
+        name: "get-user-by-id",
+        description: "Get user by ID",
+        inputSchema: {
+          type: "object",
+          properties: {
+            userId: {
+              type: "string",
+              description: "User ID",
+              "x-parameter-location": "path",
+            },
+            fields: {
+              type: "string",
+              description: "Fields to return",
+              "x-parameter-location": "query",
+            },
+          },
+        },
+      }
+
+      // Set up the tool in the client
+      const toolsMap = new Map()
+      toolsMap.set("GET-user-userId", mockTool)
+      apiClient.setTools(toolsMap)
+
+      // Execute the call with both path and query params
+      await apiClient.executeApiCall("GET-user-userId", {
+        userId: "user123",
+        fields: "name,email",
+      })
+
+      // Verify the correct URL was constructed and params sent
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/user/user123",
+        headers: { "X-API-Key": "test-key" },
+        params: { fields: "name,email" },
+      })
+    })
+
+    it("should handle query parameters that match path segments but are not path parameters", async () => {
+      // Create a mock tool that has a segment name that could be confused with a query param
+      const mockTool = {
+        name: "search-results",
+        description: "Search results",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Search query",
+              "x-parameter-location": "query",
+            },
+            results: {
+              type: "string",
+              description: "Result format",
+              "x-parameter-location": "query",
+            },
+          },
+        },
+      }
+
+      // Set up the tool in the client
+      const toolsMap = new Map()
+      toolsMap.set("GET-search-results", mockTool)
+      apiClient.setTools(toolsMap)
+
+      // Execute with a param that matches a path segment but is not a path param
+      await apiClient.executeApiCall("GET-search-results", {
+        query: "test",
+        results: "json",
+      })
+
+      // Verify both params were sent as query params, not substituted into path
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/search/results",
+        headers: { "X-API-Key": "test-key" },
+        params: { query: "test", results: "json" },
+      })
+    })
   })
 
   describe("parseToolId", () => {

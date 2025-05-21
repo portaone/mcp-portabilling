@@ -54,9 +54,13 @@ export class OpenAPISpecLoader {
         if (method === "parameters" || !operation) continue
 
         // Skip invalid HTTP methods
-        if (!["get", "post", "put", "patch", "delete", "options", "head"].includes(method.toLowerCase())) {
-          console.log(`Skipping non-HTTP method "${method}" for path ${path}`);
-          continue;
+        if (
+          !["get", "post", "put", "patch", "delete", "options", "head"].includes(
+            method.toLowerCase(),
+          )
+        ) {
+          console.log(`Skipping non-HTTP method "${method}" for path ${path}`)
+          continue
         }
 
         const op = operation as OpenAPIV3.OperationObject
@@ -87,6 +91,7 @@ export class OpenAPISpecLoader {
                 tool.inputSchema.properties[param.name] = {
                   type: paramSchema.type || "string",
                   description: param.description || `${param.name} parameter`,
+                  "x-parameter-location": param.in, // Store parameter location (path, query, etc.)
                 }
               }
               // Add required parameters to our temporary array

@@ -1,10 +1,12 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
+import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
 /**
  * Client for making API calls to the backend service
  */
 export class ApiClient {
   private axiosInstance: AxiosInstance
+  private toolsMap: Map<string, Tool> = new Map()
 
   /**
    * Create a new API client
@@ -22,6 +24,25 @@ export class ApiClient {
   }
 
   /**
+   * Set the available tools for the client
+   *
+   * @param tools - Map of tool ID to tool definition
+   */
+  setTools(tools: Map<string, Tool>): void {
+    this.toolsMap = tools
+  }
+
+  /**
+   * Get a tool definition by ID
+   *
+   * @param toolId - The tool ID
+   * @returns The tool definition if found
+   */
+  private getToolDefinition(toolId: string): Tool | undefined {
+    return this.toolsMap.get(toolId)
+  }
+
+  /**
    * Execute an API call based on the tool ID and parameters
    *
    * @param toolId - The tool ID in format METHOD-path-parts
@@ -33,15 +54,36 @@ export class ApiClient {
       // Parse method and path from the tool ID
       const { method, path } = this.parseToolId(toolId)
 
+      // Get the tool definition, if available
+      const toolDef = this.getToolDefinition(toolId)
+
       // Interpolate path parameters into the URL and remove them from params
       const paramsCopy: Record<string, any> = { ...params }
       let resolvedPath = path
-      for (const key of Object.keys(paramsCopy)) {
-        if (resolvedPath.includes(`/${key}`)) {
-          const value = paramsCopy[key]
-          // Replace segment and encode value
-          resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
-          delete paramsCopy[key]
+
+      // Handle path parameters
+      if (toolDef?.inputSchema?.properties) {
+        // Check each parameter to see if it's a path parameter
+        for (const [key, value] of Object.entries(paramsCopy)) {
+          const paramDef = toolDef.inputSchema.properties[key]
+          // Get the parameter location from the extended schema
+          const paramDef_any = paramDef as any
+          const paramLocation = paramDef_any?.["x-parameter-location"]
+
+          // If it's a path parameter, interpolate it into the URL and remove from params
+          if (paramLocation === "path") {
+            resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            delete paramsCopy[key]
+          }
+        }
+      } else {
+        // Fallback behavior if tool definition is not available
+        for (const key of Object.keys(paramsCopy)) {
+          if (resolvedPath.includes(`/${key}`)) {
+            const value = paramsCopy[key]
+            resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            delete paramsCopy[key]
+          }
         }
       }
 

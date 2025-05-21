@@ -4,6 +4,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprot
 import { OpenAPIMCPServerConfig } from "./config"
 import { ToolsManager } from "./tools-manager"
 import { ApiClient } from "./api-client"
+import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
 /**
  * MCP server implementation for OpenAPI specifications
@@ -101,6 +102,15 @@ export class OpenAPIServer {
    */
   async start(transport: Transport): Promise<void> {
     await this.toolsManager.initialize()
+    // Pass the tools to the API client
+    const toolsMap = new Map<string, Tool>()
+    this.toolsManager.getAllTools().forEach((tool) => {
+      const toolInfo = this.toolsManager.findTool(tool.name)
+      if (toolInfo) {
+        toolsMap.set(toolInfo.toolId, tool)
+      }
+    })
+    this.apiClient.setTools(toolsMap)
     await this.server.connect(transport)
   }
 }

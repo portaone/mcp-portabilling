@@ -68,6 +68,7 @@ describe("OpenAPIServer", () => {
       () =>
         ({
           executeApiCall: vi.fn(),
+          setTools: vi.fn(),
         }) as any,
     )
 

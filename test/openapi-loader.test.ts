@@ -207,6 +207,7 @@ paths:
           limit: {
             type: "integer",
             description: "Maximum number of users to return",
+            "x-parameter-location": "query",
           },
         },
       })
@@ -223,6 +224,7 @@ paths:
           id: {
             type: "string",
             description: "User ID",
+            "x-parameter-location": "path",
           },
         },
         required: ["id"],
