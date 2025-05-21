@@ -76,9 +76,10 @@ export class ToolsManager {
     for (const [toolId, tool] of rawTools.entries()) {
       // includeTools filter
       if (this.config.includeTools && this.config.includeTools.length > 0) {
+        const includeToolsLower = this.config.includeTools.map((t) => t.toLowerCase())
         if (
-          !this.config.includeTools.includes(toolId) &&
-          !this.config.includeTools.includes(tool.name)
+          !includeToolsLower.includes(toolId.toLowerCase()) &&
+          !includeToolsLower.includes(tool.name.toLowerCase())
         ) {
           continue
         }
@@ -133,14 +134,18 @@ export class ToolsManager {
    * Find a tool by ID or name
    */
   findTool(idOrName: string): { toolId: string; tool: Tool } | undefined {
-    // Try to find by ID first
-    if (this.tools.has(idOrName)) {
-      return { toolId: idOrName, tool: this.tools.get(idOrName)! }
+    const lowerIdOrName = idOrName.toLowerCase()
+
+    // Try to find by ID first (case-insensitive)
+    for (const [toolId, tool] of this.tools.entries()) {
+      if (toolId.toLowerCase() === lowerIdOrName) {
+        return { toolId, tool }
+      }
     }
 
-    // Then try to find by name
+    // Then try to find by name (case-insensitive)
     for (const [toolId, tool] of this.tools.entries()) {
-      if (tool.name === idOrName) {
+      if (tool.name.toLowerCase() === lowerIdOrName) {
         return { toolId, tool }
       }
     }
