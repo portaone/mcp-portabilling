@@ -289,6 +289,347 @@ paths:
       expect(tools.size).toBe(1)
       expect(tools.has("GET-users")).toBe(true)
     })
+
+    it("should skip non-HTTP methods in path item", () => {
+      const specWithNonHttpMethods: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/api/users": {
+            // Valid HTTP method
+            get: {
+              operationId: "getUsers",
+              responses: {},
+            },
+            // Non-HTTP method property that should be skipped
+            servers: [{ url: "https://api.example.com" }],
+            // Another non-HTTP method that should be skipped
+            summary: "Users API endpoint",
+            // Another valid HTTP method
+            post: {
+              operationId: "createUser",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithNonHttpMethods)
+      expect(tools.size).toBe(2)
+      expect(tools.has("GET-api-users")).toBe(true)
+      expect(tools.has("POST-api-users")).toBe(true)
+      // Verify non-HTTP methods aren't included
+      expect([...tools.keys()].some((key) => key.startsWith("SERVERS-"))).toBe(false)
+      expect([...tools.keys()].some((key) => key.startsWith("SUMMARY-"))).toBe(false)
+    })
+
+    // New tests for Input Schema Composition and $ref inlining
+    it("should merge primitive request bodies into a 'body' property and mark required", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Primitive API", version: "1.0.0" },
+        paths: {
+          "/echo": {
+            post: {
+              summary: "Echo primitive",
+              requestBody: {
+                content: { "application/json": { schema: { type: "string" } } },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+      }
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("POST-echo")!
+      expect(tool.inputSchema.properties).toHaveProperty("body")
+      expect((tool.inputSchema.properties! as any).body.type).toBe("string")
+      expect(tool.inputSchema.required).toEqual(["body"])
+    })
+
+    it("should merge object request bodies and preserve property names and required flags", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Object API", version: "1.0.0" },
+        paths: {
+          "/create": {
+            post: {
+              summary: "Create object",
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: { foo: { type: "integer" }, bar: { type: "boolean" } },
+                      required: ["foo"],
+                    },
+                  },
+                },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+      }
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("POST-create")!
+      expect(tool.inputSchema.properties).toHaveProperty("foo")
+      expect(tool.inputSchema.properties).toHaveProperty("bar")
+      expect(tool.inputSchema.required).toEqual(["foo"])
+    })
+
+    it("should merge array request bodies into 'body' property and mark required", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Array API", version: "1.0.0" },
+        paths: {
+          "/list": {
+            post: {
+              summary: "List items",
+              requestBody: {
+                content: {
+                  "application/json": { schema: { type: "array", items: { type: "number" } } },
+                },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+      }
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("POST-list")!
+      expect(tool.inputSchema.properties).toHaveProperty("body")
+      expect((tool.inputSchema.properties! as any).body.type).toBe("array")
+      expect(tool.inputSchema.required).toEqual(["body"])
+    })
+
+    it("should merge parameters and requestBody, handling name collisions by prefixing", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Mix API", version: "1.0.0" },
+        paths: {
+          "/items/{id}": {
+            post: {
+              summary: "Update item",
+              parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: { id: { type: "string" }, value: { type: "string" } },
+                      required: ["value"],
+                    },
+                  },
+                },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+      }
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("POST-items-id")!
+      // Path param 'id' and body properties
+      expect(tool.inputSchema.properties).toHaveProperty("id")
+      expect(tool.inputSchema.properties).toHaveProperty("value")
+      // Only required: path param and required body properties
+      expect(tool.inputSchema.required).toEqual(["id", "value"])
+    })
+
+    it("should inline $ref schemas and drop recursive cycles in requestBody", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Ref API", version: "1.0.0" },
+        paths: {
+          "/person": {
+            post: {
+              summary: "Create person",
+              requestBody: {
+                content: {
+                  "application/json": { schema: { $ref: "#/components/schemas/Person" } },
+                },
+              },
+              responses: { "200": { description: "OK" } },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Person: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                friend: { $ref: "#/components/schemas/Person" },
+              },
+              required: ["name"],
+            },
+          },
+        },
+      }
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("POST-person")!
+      expect(tool.inputSchema.properties).toHaveProperty("name")
+      expect(tool.inputSchema.properties).toHaveProperty("friend")
+      // friend nested should be empty object due to recursion
+      expect((tool.inputSchema.properties! as any).friend).toEqual({})
+      expect(tool.inputSchema.required).toEqual(["name"])
+    })
+
+    it("should resolve parameter references properly", () => {
+      const specWithRefParams: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/items/{id}": {
+            get: {
+              operationId: "getItemById",
+              parameters: [
+                { $ref: "#/components/parameters/IdParam" },
+                { $ref: "#/components/parameters/LimitParam" },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          parameters: {
+            IdParam: {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+              description: "Item identifier",
+            },
+            LimitParam: {
+              name: "limit",
+              in: "query",
+              required: false,
+              schema: { type: "integer" },
+              description: "Maximum number of results",
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithRefParams)
+      expect(tools.size).toBe(1)
+
+      const tool = tools.get("GET-items-id")
+      expect(tool).toBeDefined()
+
+      // Check that both referenced parameters were properly resolved
+      const properties = tool!.inputSchema.properties!
+      expect(properties).toHaveProperty("id")
+      expect(properties).toHaveProperty("limit")
+
+      // Check the details of each resolved parameter
+      expect(properties.id).toEqual({
+        type: "string",
+        description: "Item identifier",
+      })
+
+      expect(properties.limit).toEqual({
+        type: "integer",
+        description: "Maximum number of results",
+      })
+
+      // Verify that required parameters were correctly identified
+      expect(tool!.inputSchema.required).toContain("id")
+      // Check that limit isn't required (should not be in the required array)
+      const required = tool!.inputSchema.required as string[]
+      expect(required.includes("limit")).toBe(false)
+    })
+
+    it("should resolve nested references in parameters", () => {
+      const specWithNestedRefs: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/products": {
+            get: {
+              operationId: "getProducts",
+              parameters: [
+                { $ref: "#/components/parameters/FilterParam" },
+                { $ref: "#/components/parameters/PaginationParam" },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            PaginationOptions: {
+              type: "object",
+              properties: {
+                page: { type: "integer", description: "Page number", default: 1 },
+                size: { type: "integer", description: "Items per page", default: 20 },
+              },
+            },
+            FilterOptions: {
+              type: "object",
+              properties: {
+                category: { type: "string", description: "Product category" },
+                minPrice: { type: "number", description: "Minimum price" },
+              },
+            },
+          },
+          parameters: {
+            FilterParam: {
+              name: "filter",
+              in: "query",
+              required: false,
+              schema: { $ref: "#/components/schemas/FilterOptions" },
+              description: "Product filtering options",
+            },
+            PaginationParam: {
+              name: "pagination",
+              in: "query",
+              required: false,
+              schema: { $ref: "#/components/schemas/PaginationOptions" },
+              description: "Pagination options",
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithNestedRefs)
+      expect(tools.size).toBe(1)
+
+      const tool = tools.get("GET-products")
+      expect(tool).toBeDefined()
+
+      // Check that both referenced parameters were properly resolved
+      const properties = tool!.inputSchema.properties!
+      expect(properties).toHaveProperty("filter")
+      expect(properties).toHaveProperty("pagination")
+
+      // Now that we've improved the implementation, we should get fully resolved nested references
+      const filterParam = properties.filter as Record<string, any>
+      expect(filterParam.type).toBe("object")
+      expect(filterParam.description).toBe("Product filtering options")
+      // Check that nested properties are preserved
+      expect(filterParam.properties).toBeDefined()
+      expect(filterParam.properties.category).toBeDefined()
+      expect(filterParam.properties.category.type).toBe("string")
+      expect(filterParam.properties.category.description).toBe("Product category")
+      expect(filterParam.properties.minPrice).toBeDefined()
+      expect(filterParam.properties.minPrice.type).toBe("number")
+      expect(filterParam.properties.minPrice.description).toBe("Minimum price")
+
+      const paginationParam = properties.pagination as Record<string, any>
+      expect(paginationParam.type).toBe("object")
+      expect(paginationParam.description).toBe("Pagination options")
+      // Check that nested properties with defaults are preserved
+      expect(paginationParam.properties).toBeDefined()
+      expect(paginationParam.properties.page).toBeDefined()
+      expect(paginationParam.properties.page.type).toBe("integer")
+      expect(paginationParam.properties.page.default).toBe(1)
+      expect(paginationParam.properties.size).toBeDefined()
+      expect(paginationParam.properties.size.type).toBe("integer")
+      expect(paginationParam.properties.size.default).toBe(20)
+
+      // Neither parameter should be required
+      const required = tool!.inputSchema.required
+      expect(required).toBeUndefined()
+    })
   })
 
   describe("abbreviateOperationId", () => {

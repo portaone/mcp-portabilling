@@ -41,6 +41,61 @@ export class OpenAPISpecLoader {
   }
 
   /**
+   * Inline `$ref` schemas from components and drop recursive cycles
+   */
+  private inlineSchema(
+    schema: OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+    components: Record<string, OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject> | undefined,
+    visited: Set<string>,
+  ): OpenAPIV3.SchemaObject {
+    // Handle reference objects
+    if ("$ref" in schema && typeof schema.$ref === "string") {
+      const ref = schema.$ref
+      const match = ref.match(/^#\/components\/schemas\/(.+)$/)
+      if (match && components) {
+        const name = match[1]
+        if (visited.has(name)) {
+          return {} as OpenAPIV3.SchemaObject
+        }
+        const comp = components[name]
+        if (!comp) {
+          return {} as OpenAPIV3.SchemaObject
+        }
+        visited.add(name)
+        return this.inlineSchema(comp, components, visited)
+      }
+    }
+
+    // We know it's a SchemaObject now since ReferenceObject only has $ref
+    const schemaObj = schema as OpenAPIV3.SchemaObject
+
+    // Inline object schemas
+    if (schemaObj.type === "object" && schemaObj.properties) {
+      const newProps: Record<string, OpenAPIV3.SchemaObject> = {}
+      for (const [propName, propSchema] of Object.entries(schemaObj.properties)) {
+        newProps[propName] = this.inlineSchema(
+          propSchema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+          components,
+          new Set(visited),
+        )
+      }
+      return { ...schemaObj, properties: newProps } as OpenAPIV3.SchemaObject
+    }
+    // Inline array schemas
+    if (schemaObj.type === "array" && schemaObj.items) {
+      return {
+        ...schemaObj,
+        items: this.inlineSchema(
+          schemaObj.items as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+          components,
+          new Set(visited),
+        ),
+      } as OpenAPIV3.SchemaObject
+    }
+    return schemaObj
+  }
+
+  /**
    * Parse an OpenAPI specification into a map of tools
    */
   parseOpenAPISpec(spec: OpenAPIV3.Document): Map<string, Tool> {
@@ -53,14 +108,14 @@ export class OpenAPISpecLoader {
       for (const [method, operation] of Object.entries(pathItem)) {
         if (method === "parameters" || !operation) continue
 
-        // Skip invalid HTTP methods
-        if (!["get", "post", "put", "patch", "delete", "options", "head"].includes(method.toLowerCase())) {
-          console.log(`Skipping non-HTTP method "${method}" for path ${path}`);
-          continue;
+        // Check if method is an HTTP method
+        if (
+          !["get", "put", "post", "delete", "options", "head", "patch", "trace"].includes(method)
+        ) {
+          continue
         }
 
         const op = operation as OpenAPIV3.OperationObject
-        // Create a clean tool ID by removing the leading slash and replacing special chars
         const cleanPath = path.replace(/^\//, "").replace(/\{([^}]+)\}/g, "$1")
         const toolId = `${method.toUpperCase()}-${cleanPath}`.replace(/[^a-zA-Z0-9-]/g, "-")
 
@@ -76,31 +131,127 @@ export class OpenAPISpecLoader {
           },
         }
 
-        // Add parameters from operation
-        if (op.parameters) {
-          const requiredParams: string[] = []
+        // Gather all required property names
+        const requiredParams: string[] = []
 
+        // Merge parameters into inputSchema
+        if (op.parameters) {
           for (const param of op.parameters) {
-            if ("name" in param && "in" in param) {
-              const paramSchema = param.schema as OpenAPIV3.SchemaObject
-              if (tool.inputSchema && tool.inputSchema.properties) {
-                tool.inputSchema.properties[param.name] = {
-                  type: paramSchema.type || "string",
-                  description: param.description || `${param.name} parameter`,
+            let paramObj: OpenAPIV3.ParameterObject
+
+            // Handle parameter references by resolving them
+            if (!("name" in param)) {
+              // This is a reference, attempt to resolve it
+              if ("$ref" in param && typeof param.$ref === "string") {
+                const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
+                if (refMatch && spec.components?.parameters) {
+                  const paramName = refMatch[1]
+                  const resolvedParam = spec.components.parameters[paramName]
+
+                  // Skip if we can't resolve the reference
+                  if (!resolvedParam || !("name" in resolvedParam)) continue
+
+                  paramObj = resolvedParam as OpenAPIV3.ParameterObject
+                } else {
+                  continue // Skip unresolvable references
                 }
+              } else {
+                continue // Skip if not a proper $ref
               }
-              // Add required parameters to our temporary array
-              if (param.required === true) {
-                requiredParams.push(param.name)
+            } else {
+              paramObj = param as OpenAPIV3.ParameterObject
+            }
+
+            if (paramObj.schema) {
+              // Get the fully inlined schema with all nested references resolved
+              const paramSchema = this.inlineSchema(
+                paramObj.schema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+                spec.components?.schemas,
+                new Set<string>(),
+              )
+
+              // Create the parameter with just the essential properties first
+              const paramDef: any = {
+                description: paramObj.description || `${paramObj.name} parameter`,
+              }
+
+              // Preserve the type
+              if (paramSchema.type) {
+                paramDef.type = paramSchema.type
+              } else {
+                paramDef.type = "string" // Default to string if no type specified
+              }
+
+              // Copy relevant properties from the inlined schema
+              // This preserves nested structures while avoiding type issues
+              for (const [key, value] of Object.entries(paramSchema)) {
+                // Skip the type and properties already set
+                if (key === "type" || key === "description") continue
+
+                // Copy the property
+                paramDef[key] = value
+              }
+
+              // Add the schema to the tool's input schema properties
+              tool.inputSchema.properties![paramObj.name] = paramDef
+
+              if (paramObj.required === true) {
+                requiredParams.push(paramObj.name)
               }
             }
           }
+        }
 
-          // Only add the required array if there are required parameters
-          if (requiredParams.length > 0 && tool.inputSchema) {
-            tool.inputSchema.required = requiredParams
+        // Merge requestBody schema into inputSchema
+        if (op.requestBody && "content" in op.requestBody) {
+          const requestBodyObj = op.requestBody as OpenAPIV3.RequestBodyObject
+
+          // Handle different content types
+          let mediaTypeObj: OpenAPIV3.MediaTypeObject | undefined
+
+          if (requestBodyObj.content["application/json"]) {
+            mediaTypeObj = requestBodyObj.content["application/json"]
+          } else if (Object.keys(requestBodyObj.content).length > 0) {
+            // Take the first available content type
+            const firstContentType = Object.keys(requestBodyObj.content)[0]
+            mediaTypeObj = requestBodyObj.content[firstContentType]
+          }
+
+          if (mediaTypeObj?.schema) {
+            // Handle schema inlining with proper types
+            const inlinedSchema = this.inlineSchema(
+              mediaTypeObj.schema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+              spec.components?.schemas,
+              new Set<string>(),
+            )
+
+            // Include all properties from inlinedSchema for object, else use body wrapper
+            if (inlinedSchema.type === "object" && inlinedSchema.properties) {
+              // Handle object properties
+              for (const [propName, propSchema] of Object.entries(inlinedSchema.properties)) {
+                const paramName = tool.inputSchema.properties![propName]
+                  ? `body_${propName}`
+                  : propName
+
+                tool.inputSchema.properties![paramName] = propSchema as OpenAPIV3.SchemaObject
+
+                if (inlinedSchema.required && inlinedSchema.required.includes(propName)) {
+                  requiredParams.push(paramName)
+                }
+              }
+            } else {
+              // Use body wrapper for non-object schemas
+              tool.inputSchema.properties!["body"] = inlinedSchema
+              requiredParams.push("body")
+            }
           }
         }
+
+        // Only add the required array if there are required properties
+        if (requiredParams.length > 0) {
+          tool.inputSchema.required = requiredParams
+        }
+
         tools.set(toolId, tool)
       }
     }
