@@ -32,6 +32,7 @@ const config: OpenAPIMCPServerConfig = {
   httpPort: 3000,
   httpHost: "127.0.0.1",
   endpointPath: "/mcp",
+  toolsMode: "all",
 }
 
 describe("OpenAPIServer", () => {
