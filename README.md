@@ -142,7 +142,36 @@ npx @ivotoby/openapi-mcp-server \
   --path /mcp
 ```
 
-### Tool Loading & Filtering Options
+### OpenAPI Schema Processing
+
+### Reference Resolution
+
+This MCP server implements robust OpenAPI reference (`$ref`) resolution to ensure accurate representation of API schemas:
+
+- **Parameter References**: Fully resolves `$ref` pointers to parameter components in the OpenAPI spec
+- **Schema References**: Handles nested schema references within parameters and request bodies
+- **Recursive References**: Prevents infinite loops by detecting and handling circular references
+- **Nested Properties**: Preserves complex nested object and array structures with all their attributes
+
+### Input Schema Composition
+
+The server intelligently merges parameters and request bodies into a unified input schema for each tool:
+
+- **Parameters + Request Body Merging**: Combines path, query, and body parameters into a single schema
+- **Collision Handling**: Resolves naming conflicts by prefixing body properties that conflict with parameter names
+- **Type Preservation**: Maintains the original type information for all schema elements
+- **Metadata Retention**: Preserves descriptions, formats, defaults, enums, and other schema attributes
+
+### Complex Schema Support
+
+The MCP server handles various OpenAPI schema complexities:
+
+- **Primitive Type Bodies**: Wraps non-object request bodies in a "body" property
+- **Object Bodies**: Flattens object properties into the tool's input schema
+- **Array Bodies**: Properly handles array schemas with their nested item definitions
+- **Required Properties**: Tracks and preserves which parameters and properties are required
+
+## Tool Loading & Filtering Options
 
 Based on the Stainless article "What We Learned Converting Complex OpenAPI Specs to MCP Servers" (https://www.stainless.com/blog/what-we-learned-converting-complex-openapi-specs-to-mcp-servers), the following flags were added to control which API endpoints (tools) are loaded:
 
@@ -230,6 +259,12 @@ A: Use the `--headers` flag or `API_HEADERS` environment variable with `key:valu
 
 **Q: Which transport methods are supported?**
 A: The server supports stdio transport (default) for integration with AI systems and HTTP transport (with streaming via SSE) for web clients.
+
+**Q: How does the server handle complex OpenAPI schemas with references?**
+A: The server fully resolves `$ref` references in parameters and schemas, preserving nested structures, default values, and other attributes. See the "OpenAPI Schema Processing" section for details on reference resolution and schema composition.
+
+**Q: What happens when parameter names conflict with request body properties?**
+A: The server detects naming conflicts and automatically prefixes body property names with `body_` to avoid collisions, ensuring all properties are accessible.
 
 **Q: Where can I find development and contribution guidelines?**
 A: See the "For Developers" section above for commands (`npm run build`, `npm run dev`, etc) and pull request workflow.
