@@ -119,7 +119,8 @@ export class ToolsManager {
         // Get the operation for the method (get, post, etc.)
         const opObj = pathItem[methodLower]
         const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
-        if (!tags.some((t: string) => this.config.includeTags!.includes(t))) continue
+        const includeTagsLower = this.config.includeTags.map((tag) => tag.toLowerCase())
+        if (!tags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))) continue
       }
       filtered.set(toolId, tool)
     }

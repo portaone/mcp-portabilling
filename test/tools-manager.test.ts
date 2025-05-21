@@ -125,6 +125,25 @@ describe("ToolsManager", () => {
       await toolsManager.initialize()
       expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-a"])
     })
+
+    it("should filter tools by includeTags list case-insensitively", async () => {
+      const spec = {
+        paths: {
+          "/a": { get: { tags: ["USERS"] } },
+          "/b": { get: { tags: ["products"] } },
+        },
+      } as any
+      const mockTools = new Map([
+        ["GET-a", { name: "a" } as Tool],
+        ["GET-b", { name: "b" } as Tool],
+      ])
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue(spec)
+      mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+      ;(toolsManager as any).config.toolsMode = "all"
+      ;(toolsManager as any).config.includeTags = ["users"] // lowercase, will match uppercase "USERS"
+      await toolsManager.initialize()
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-a"])
+    })
   })
 
   describe("getAllTools", () => {
