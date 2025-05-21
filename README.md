@@ -175,7 +175,7 @@ The MCP server handles various OpenAPI schema complexities:
 
 Based on the Stainless article "What We Learned Converting Complex OpenAPI Specs to MCP Servers" (https://www.stainless.com/blog/what-we-learned-converting-complex-openapi-specs-to-mcp-servers), the following flags were added to control which API endpoints (tools) are loaded:
 
-- `--tools <all|dynamic>`: Choose to load all tools (default) or only dynamic meta-tools (`list_api_endpoints`, `get_api_endpoint_schema`, `invoke_api_endpoint`).
+- `--tools <all|dynamic>`: Choose to load all tools (default) or only dynamic meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`).
 - `--tool <toolId>`: Import only specified tool IDs or names. Can be used multiple times.
 - `--tag <tag>`: Import only tools with the specified OpenAPI tag. Can be used multiple times.
 - `--resource <resource>`: Import only tools under the specified resource path prefixes. Can be used multiple times.
@@ -252,7 +252,7 @@ A: A tool corresponds to a single API endpoint derived from your OpenAPI specifi
 A: Use the `--tool`, `--tag`, `--resource`, and `--operation` flags, or set `TOOLS_MODE=dynamic` for meta-tools only.
 
 **Q: When should I use dynamic mode?**
-A: Dynamic mode provides meta-tools (`list_api_endpoints`, `get_api_endpoint_schema`, `invoke_api_endpoint`) to inspect and interact with endpoints without preloading all operations, which is useful for large or changing APIs.
+A: Dynamic mode provides meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`) to inspect and interact with endpoints without preloading all operations, which is useful for large or changing APIs.
 
 **Q: How do I specify custom headers for API requests?**
 A: Use the `--headers` flag or `API_HEADERS` environment variable with `key:value` pairs separated by commas.
