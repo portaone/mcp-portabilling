@@ -105,6 +105,62 @@ export class OpenAPISpecLoader {
   }
 
   /**
+   * Determine the appropriate JSON Schema type for a parameter
+   * @param paramSchema The OpenAPI schema object after inlining
+   * @param paramName The name of the parameter (for logging purposes)
+   * @returns The determined type string, or undefined if the type should be omitted
+   */
+  private determineParameterType(
+    paramSchema: OpenAPIV3.SchemaObject,
+    paramName: string,
+  ): string | undefined {
+    // Handle empty schema (potentially from cycle removal in inlineSchema)
+    if (Object.keys(paramSchema).length === 0 && typeof paramSchema !== "boolean") {
+      console.warn(
+        `Parameter '${paramName}' schema was empty after inlining (potential cycle or unresolvable ref), defaulting to string.`,
+      )
+      return "string"
+    }
+
+    // Handle boolean schema (true/false for allowing any/no value)
+    if (typeof paramSchema === "boolean") {
+      return "boolean" // Or alternate convention if needed
+    }
+
+    // Use explicit type if available
+    if (paramSchema.type) {
+      return paramSchema.type
+    }
+
+    // Determine if schema has structural elements that imply a type
+    const hasProperties =
+      "properties" in paramSchema &&
+      paramSchema.properties &&
+      Object.keys(paramSchema.properties).length > 0
+
+    const hasItems =
+      paramSchema.type === "array" && !!(paramSchema as OpenAPIV3.ArraySchemaObject).items
+
+    const hasComposition =
+      ("allOf" in paramSchema && paramSchema.allOf && paramSchema.allOf.length > 0) ||
+      ("anyOf" in paramSchema && paramSchema.anyOf && paramSchema.anyOf.length > 0) ||
+      ("oneOf" in paramSchema && paramSchema.oneOf && paramSchema.oneOf.length > 0)
+
+    // If no structural elements, default to string
+    if (!hasProperties && !hasItems && !hasComposition) {
+      return "string"
+    }
+
+    // For complex schemas with structural elements but no explicit type,
+    // return undefined to omit the type field.
+    // JSON Schema validators can infer type from structure:
+    // - 'object' if properties exist
+    // - 'array' if items exist
+    // This behavior should be documented for consumers of the API
+    return undefined
+  }
+
+  /**
    * Parse an OpenAPI specification into a map of tools
    */
   parseOpenAPISpec(spec: OpenAPIV3.Document): Map<string, Tool> {
@@ -204,48 +260,10 @@ export class OpenAPISpecLoader {
                 "x-parameter-location": paramObj.in, // Store parameter location (path, query, etc.)
               }
 
-              // Handle schema type assignment
-              if (Object.keys(paramSchema).length === 0 && typeof paramSchema !== "boolean") {
-                // Check for boolean type as well, since SchemaObject can be boolean
-                // An empty object might result from cycle removal in inlineSchema
-                console.warn(
-                  `Parameter '${paramObj.name}' schema was empty after inlining (potential cycle or unresolvable ref), defaulting to string.`,
-                )
-                paramDef.type = "string"
-              } else if (typeof paramSchema === "boolean") {
-                // If the schema is a boolean (true/false for allowing any/no value)
-                // We represent this as a simple boolean type for the tool schema.
-                // Or, decide on a convention (e.g. typeless, or specific string type)
-                paramDef.type = "boolean" // Or handle as per desired convention
-              } else {
-                // Preserve the type if explicitly set in the schema
-                if (paramSchema.type) {
-                  paramDef.type = paramSchema.type
-                } else {
-                  // If no explicit type, infer if it's an object/array if properties/items exist.
-                  // Otherwise, default to "string" if no other structural clues are present.
-                  const hasProperties =
-                    "properties" in paramSchema &&
-                    paramSchema.properties &&
-                    Object.keys(paramSchema.properties).length > 0
-                  const hasItems =
-                    paramSchema.type === "array" &&
-                    !!(paramSchema as OpenAPIV3.ArraySchemaObject).items
-                  const hasComposition =
-                    ("allOf" in paramSchema && paramSchema.allOf && paramSchema.allOf.length > 0) ||
-                    ("anyOf" in paramSchema && paramSchema.anyOf && paramSchema.anyOf.length > 0) ||
-                    ("oneOf" in paramSchema && paramSchema.oneOf && paramSchema.oneOf.length > 0)
-
-                  if (!hasProperties && !hasItems && !hasComposition) {
-                    // If no explicit type AND no clear structural elements, default to string.
-                    // This is a fallback; ideally, schemas should be more specific.
-                    paramDef.type = "string"
-                  }
-                  // If it has structure (properties, items, allOf, etc.) but no explicit 'type',
-                  // the 'type' field in the output JSON schema can be omitted.
-                  // JSON Schema validators can often infer 'object' if 'properties' is present,
-                  // or 'array' if 'items' is present.
-                }
+              // Determine and set the appropriate type
+              const paramType = this.determineParameterType(paramSchema, paramObj.name)
+              if (paramType !== undefined) {
+                paramDef.type = paramType
               }
 
               // Copy all other relevant properties from the inlined schema to paramDef
