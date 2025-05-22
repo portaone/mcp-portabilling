@@ -51,9 +51,17 @@ describe("loadConfig", () => {
     // Clear environment variables that might affect tests
     delete process.env.API_BASE_URL
     delete process.env.OPENAPI_SPEC_PATH
+    delete process.env.OPENAPI_SPEC_FROM_STDIN
+    delete process.env.OPENAPI_SPEC_INLINE
     delete process.env.API_HEADERS
     delete process.env.SERVER_NAME
     delete process.env.SERVER_VERSION
+    delete process.env.TRANSPORT_TYPE
+    delete process.env.HTTP_PORT
+    delete process.env.HTTP_HOST
+    delete process.env.ENDPOINT_PATH
+    delete process.env.TOOLS_MODE
+    delete process.env.DISABLE_ABBREVIATION
 
     // Reset mocks before each test
     vi.clearAllMocks()
@@ -81,7 +89,7 @@ describe("loadConfig", () => {
           "openapi-spec": "./spec.json",
           headers: "Authorization:Bearer token",
           name: "test-server",
-          version: "1.2.3",
+          "server-version": "1.2.3",
           transport: "stdio",
         }),
       }),
@@ -100,6 +108,8 @@ describe("loadConfig", () => {
       version: "1.2.3",
       apiBaseUrl: "https://api.example.com",
       openApiSpec: "./spec.json",
+      specInputMethod: "file",
+      inlineSpecContent: undefined,
       headers: {
         Authorization: "Bearer token",
       },
@@ -112,6 +122,7 @@ describe("loadConfig", () => {
       includeResources: undefined,
       includeOperations: undefined,
       toolsMode: "all",
+      disableAbbreviation: undefined,
     })
   })
 
@@ -192,6 +203,8 @@ describe("loadConfig", () => {
       version: "3.2.1",
       apiBaseUrl: "https://env.example.com",
       openApiSpec: "./env-spec.json",
+      specInputMethod: "file",
+      inlineSpecContent: undefined,
       headers: {
         "X-API-Key": "12345",
       },
@@ -204,6 +217,7 @@ describe("loadConfig", () => {
       includeResources: undefined,
       includeOperations: undefined,
       toolsMode: "all",
+      disableAbbreviation: undefined,
     })
   })
 
@@ -242,7 +256,7 @@ describe("loadConfig", () => {
         parseSync: vi.fn().mockReturnValue({
           "api-base-url": "https://api.example.com",
           "openapi-spec": "./spec.json",
-          "disable-abbreviation": true
+          "disable-abbreviation": true,
         }),
       }),
     }))
@@ -275,8 +289,8 @@ describe("loadConfig", () => {
       hideBin: vi.fn((arr) => arr),
     }))
 
-    process.env.DISABLE_ABBREVIATION = 'true'
-    
+    process.env.DISABLE_ABBREVIATION = "true"
+
     // Import the module again after resetting
     const configModule = await import("../src/config")
     loadConfig = configModule.loadConfig
@@ -302,8 +316,8 @@ describe("loadConfig", () => {
       hideBin: vi.fn((arr) => arr),
     }))
 
-    process.env.DISABLE_ABBREVIATION = 'false'
-    
+    process.env.DISABLE_ABBREVIATION = "false"
+
     // Import the module again after resetting
     const configModule2 = await import("../src/config")
     loadConfig = configModule2.loadConfig
@@ -333,5 +347,220 @@ describe("loadConfig", () => {
     loadConfig = configModule3.loadConfig
     config = loadConfig()
     expect(config.disableAbbreviation).toBeUndefined()
+  })
+
+  it("should load config with URL spec", async () => {
+    // Setup mocks before importing the module
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "https://api.example.com/openapi.json",
+          headers: "Authorization:Bearer token",
+          name: "test-server",
+          "server-version": "1.2.3",
+          transport: "stdio",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    // Import the module after setting up mocks
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config).toEqual({
+      name: "test-server",
+      version: "1.2.3",
+      apiBaseUrl: "https://api.example.com",
+      openApiSpec: "https://api.example.com/openapi.json",
+      specInputMethod: "url",
+      inlineSpecContent: undefined,
+      headers: {
+        Authorization: "Bearer token",
+      },
+      transportType: "stdio",
+      httpPort: 3000,
+      httpHost: "127.0.0.1",
+      endpointPath: "/mcp",
+      includeTools: undefined,
+      includeTags: undefined,
+      includeResources: undefined,
+      includeOperations: undefined,
+      toolsMode: "all",
+      disableAbbreviation: undefined,
+    })
+  })
+
+  it("should load config with local file spec", async () => {
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config.specInputMethod).toBe("file")
+    expect(config.openApiSpec).toBe("./spec.json")
+  })
+
+  it("should load config with stdin spec", async () => {
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "spec-from-stdin": true,
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config.specInputMethod).toBe("stdin")
+    expect(config.openApiSpec).toBe("stdin")
+  })
+
+  it("should load config with inline spec", async () => {
+    const inlineSpec =
+      '{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}, "paths": {}}'
+
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "spec-inline": inlineSpec,
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config.specInputMethod).toBe("inline")
+    expect(config.openApiSpec).toBe("inline")
+    expect(config.inlineSpecContent).toBe(inlineSpec)
+  })
+
+  it("should load config with environment variables for stdin", async () => {
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({}),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    process.env.API_BASE_URL = "https://env.example.com"
+    process.env.OPENAPI_SPEC_FROM_STDIN = "true"
+
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config.specInputMethod).toBe("stdin")
+    expect(config.openApiSpec).toBe("stdin")
+  })
+
+  it("should load config with environment variables for inline spec", async () => {
+    const inlineSpec = '{"openapi": "3.0.0"}'
+
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({}),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    process.env.API_BASE_URL = "https://env.example.com"
+    process.env.OPENAPI_SPEC_INLINE = inlineSpec
+
+    const { loadConfig } = await import("../src/config")
+
+    const config = loadConfig()
+    expect(config.specInputMethod).toBe("inline")
+    expect(config.inlineSpecContent).toBe(inlineSpec)
+  })
+
+  it("should throw error if no spec input method is provided", async () => {
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const { loadConfig } = await import("../src/config")
+
+    expect(() => loadConfig()).toThrow(
+      "OpenAPI spec is required. Use one of: --openapi-spec, --spec-from-stdin, or --spec-inline",
+    )
+  })
+
+  it("should throw error if multiple spec input methods are provided", async () => {
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+          "spec-from-stdin": true,
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const { loadConfig } = await import("../src/config")
+
+    expect(() => loadConfig()).toThrow(
+      "Only one OpenAPI spec input method can be specified at a time",
+    )
   })
 })

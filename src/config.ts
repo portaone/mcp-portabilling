@@ -6,6 +6,10 @@ export interface OpenAPIMCPServerConfig {
   version: string
   apiBaseUrl: string
   openApiSpec: string
+  /** Spec input method: 'url', 'file', 'stdin', 'inline' */
+  specInputMethod: "url" | "file" | "stdin" | "inline"
+  /** Inline spec content when using 'inline' method */
+  inlineSpecContent?: string
   headers?: Record<string, string>
   transportType: "stdio" | "http"
   httpPort?: number
@@ -72,6 +76,14 @@ export function loadConfig(): OpenAPIMCPServerConfig {
       type: "string",
       description: "Path or URL to OpenAPI specification",
     })
+    .option("spec-from-stdin", {
+      type: "boolean",
+      description: "Read OpenAPI spec from standard input",
+    })
+    .option("spec-inline", {
+      type: "string",
+      description: "Provide OpenAPI spec content directly as a string",
+    })
     .option("headers", {
       alias: "H",
       type: "string",
@@ -82,7 +94,7 @@ export function loadConfig(): OpenAPIMCPServerConfig {
       type: "string",
       description: "Server name",
     })
-    .option("version", {
+    .option("server-version", {
       alias: "v",
       type: "string",
       description: "Server version",
@@ -132,25 +144,67 @@ export function loadConfig(): OpenAPIMCPServerConfig {
   const httpHost = argv.host || process.env.HTTP_HOST || "127.0.0.1"
   const endpointPath = argv.path || process.env.ENDPOINT_PATH || "/mcp"
 
+  // Determine spec input method and validate
+  const specFromStdin = argv["spec-from-stdin"] || process.env.OPENAPI_SPEC_FROM_STDIN === "true"
+  const specInline = argv["spec-inline"] || process.env.OPENAPI_SPEC_INLINE
+  const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH
+
+  // Count how many spec input methods are specified
+  const specInputCount = [specFromStdin, !!specInline, !!openApiSpec].filter(Boolean).length
+
+  if (specInputCount === 0) {
+    throw new Error(
+      "OpenAPI spec is required. Use one of: --openapi-spec, --spec-from-stdin, or --spec-inline",
+    )
+  }
+
+  if (specInputCount > 1) {
+    throw new Error("Only one OpenAPI spec input method can be specified at a time")
+  }
+
+  // Determine spec input method and content
+  let specInputMethod: "url" | "file" | "stdin" | "inline"
+  let specPath: string
+  let inlineSpecContent: string | undefined
+
+  if (specFromStdin) {
+    specInputMethod = "stdin"
+    specPath = "stdin"
+  } else if (specInline) {
+    specInputMethod = "inline"
+    specPath = "inline"
+    inlineSpecContent = specInline
+  } else if (openApiSpec) {
+    // Determine if it's a URL or file path
+    if (openApiSpec.startsWith("http://") || openApiSpec.startsWith("https://")) {
+      specInputMethod = "url"
+    } else {
+      specInputMethod = "file"
+    }
+    specPath = openApiSpec
+  } else {
+    throw new Error("OpenAPI spec is required")
+  }
+
   // Combine CLI args and env vars, with CLI taking precedence
   const apiBaseUrl = argv["api-base-url"] || process.env.API_BASE_URL
-  const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH
-  const disableAbbreviation = argv["disable-abbreviation"] || (process.env.DISABLE_ABBREVIATION ? process.env.DISABLE_ABBREVIATION === 'true' : false)
+  const disableAbbreviation =
+    argv["disable-abbreviation"] ||
+    (process.env.DISABLE_ABBREVIATION ? process.env.DISABLE_ABBREVIATION === "true" : false)
 
   if (!apiBaseUrl) {
     throw new Error("API base URL is required (--api-base-url or API_BASE_URL)")
-  }
-  if (!openApiSpec) {
-    throw new Error("OpenAPI spec is required (--openapi-spec or OPENAPI_SPEC_PATH)")
   }
 
   const headers = parseHeaders(argv.headers || process.env.API_HEADERS)
 
   return {
     name: argv.name || process.env.SERVER_NAME || "mcp-openapi-server",
-    version: argv.version || process.env.SERVER_VERSION || "1.0.0",
+    version: argv["server-version"] || process.env.SERVER_VERSION || "1.0.0",
     apiBaseUrl,
-    openApiSpec,
+    openApiSpec: specPath,
+    specInputMethod,
+    inlineSpecContent,
     headers,
     transportType,
     httpPort,

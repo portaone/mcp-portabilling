@@ -112,7 +112,7 @@ describe("OpenAPISpecLoader", () => {
         json: async () => mockOpenAPISpec, // Though text() is used in implementation
       } as Response)
 
-      const result = await openAPILoader.loadOpenAPISpec(url)
+      const result = await openAPILoader.loadOpenAPISpec(url, "url")
 
       expect(fetch).toHaveBeenCalledWith(url)
       expect(result).toEqual(mockOpenAPISpec)
@@ -123,7 +123,7 @@ describe("OpenAPISpecLoader", () => {
       const fileContent = JSON.stringify(mockOpenAPISpec)
       vi.mocked(readFile).mockResolvedValueOnce(fileContent)
 
-      const result = await openAPILoader.loadOpenAPISpec(filePath)
+      const result = await openAPILoader.loadOpenAPISpec(filePath, "file")
 
       expect(readFile).toHaveBeenCalledWith(filePath, "utf-8")
       expect(result).toEqual(mockOpenAPISpec)
@@ -165,14 +165,111 @@ paths:
       }
 
       vi.mocked(readFile).mockResolvedValueOnce(yamlContent)
-      // No need to mock yaml.load specifically if we're testing the flow
-      // that tries JSON first then falls back to YAML.
-      // If JSON.parse throws, yaml.load should be called.
 
-      const result = await openAPILoader.loadOpenAPISpec(filePath)
+      const result = await openAPILoader.loadOpenAPISpec(filePath, "file")
 
       expect(readFile).toHaveBeenCalledWith(filePath, "utf-8")
       expect(result).toEqual(expectedSpecObject)
+    })
+
+    it("should load spec from inline content (JSON)", async () => {
+      const inlineContent = JSON.stringify(mockOpenAPISpec)
+
+      const result = await openAPILoader.loadOpenAPISpec("inline", "inline", inlineContent)
+
+      expect(result).toEqual(mockOpenAPISpec)
+    })
+
+    it("should load spec from inline content (YAML)", async () => {
+      const yamlContent = `
+openapi: 3.0.0
+info:
+  title: Inline YAML API
+  version: 1.0.0
+paths:
+  /inline:
+    get:
+      summary: Inline endpoint
+      responses:
+        '200':
+          description: Success
+`
+      const expectedSpec = {
+        openapi: "3.0.0",
+        info: {
+          title: "Inline YAML API",
+          version: "1.0.0",
+        },
+        paths: {
+          "/inline": {
+            get: {
+              summary: "Inline endpoint",
+              responses: {
+                "200": {
+                  description: "Success",
+                },
+              },
+            },
+          },
+        },
+      }
+
+      const result = await openAPILoader.loadOpenAPISpec("inline", "inline", yamlContent)
+
+      expect(result).toEqual(expectedSpec)
+    })
+
+    it("should load spec from stdin", async () => {
+      const stdinContent = JSON.stringify(mockOpenAPISpec)
+
+      // Mock process.stdin
+      const mockStdin = {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+        resume: vi.fn(),
+      }
+
+      // Replace process.stdin temporarily
+      const originalStdin = process.stdin
+      Object.defineProperty(process, "stdin", {
+        value: mockStdin,
+        configurable: true,
+      })
+
+      // Set up the stdin mock to simulate data flow
+      mockStdin.on.mockImplementation((event: string, callback: Function) => {
+        if (event === "data") {
+          setTimeout(() => callback(stdinContent), 0)
+        } else if (event === "end") {
+          setTimeout(() => callback(), 10)
+        }
+        return mockStdin
+      })
+
+      const result = await openAPILoader.loadOpenAPISpec("stdin", "stdin")
+
+      expect(mockStdin.setEncoding).toHaveBeenCalledWith("utf8")
+      expect(mockStdin.resume).toHaveBeenCalled()
+      expect(result).toEqual(mockOpenAPISpec)
+
+      // Restore original stdin
+      Object.defineProperty(process, "stdin", {
+        value: originalStdin,
+        configurable: true,
+      })
+    })
+
+    it("should throw error if URL fetch fails", async () => {
+      const url = "https://example.com/api-spec.json"
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      } as Response)
+
+      await expect(openAPILoader.loadOpenAPISpec(url, "url")).rejects.toThrow(
+        "Failed to load OpenAPI spec from url: HTTP 404: Not Found",
+      )
     })
 
     it("should throw error if file reading fails", async () => {
@@ -180,7 +277,81 @@ paths:
       const error = new Error("File not found")
       vi.mocked(readFile).mockRejectedValueOnce(error)
 
-      await expect(openAPILoader.loadOpenAPISpec(filePath)).rejects.toThrow("File not found")
+      await expect(openAPILoader.loadOpenAPISpec(filePath, "file")).rejects.toThrow(
+        "Failed to load OpenAPI spec from file: File not found",
+      )
+    })
+
+    it("should throw error if inline content is missing", async () => {
+      await expect(openAPILoader.loadOpenAPISpec("inline", "inline")).rejects.toThrow(
+        "Inline content is required when using 'inline' input method",
+      )
+    })
+
+    it("should throw error if stdin provides empty content", async () => {
+      // Mock process.stdin for empty content
+      const mockStdin = {
+        setEncoding: vi.fn(),
+        on: vi.fn(),
+        resume: vi.fn(),
+      }
+
+      const originalStdin = process.stdin
+      Object.defineProperty(process, "stdin", {
+        value: mockStdin,
+        configurable: true,
+      })
+
+      mockStdin.on.mockImplementation((event: string, callback: Function) => {
+        if (event === "end") {
+          setTimeout(() => callback(), 0)
+        }
+        return mockStdin
+      })
+
+      await expect(openAPILoader.loadOpenAPISpec("stdin", "stdin")).rejects.toThrow(
+        "Failed to load OpenAPI spec from stdin: No data received from stdin",
+      )
+
+      Object.defineProperty(process, "stdin", {
+        value: originalStdin,
+        configurable: true,
+      })
+    })
+
+    it("should throw error for invalid JSON/YAML content", async () => {
+      const invalidContent = "{ invalid json content"
+
+      await expect(
+        openAPILoader.loadOpenAPISpec("inline", "inline", invalidContent),
+      ).rejects.toThrow(/Failed to parse as JSON or YAML/)
+    })
+
+    it("should throw error for empty content", async () => {
+      await expect(openAPILoader.loadOpenAPISpec("inline", "inline", "")).rejects.toThrow(
+        "Failed to load OpenAPI spec from inline",
+      )
+    })
+
+    it("should throw error for unsupported input method", async () => {
+      await expect(openAPILoader.loadOpenAPISpec("test", "unsupported" as any)).rejects.toThrow(
+        "Unsupported input method: unsupported",
+      )
+    })
+
+    // Backward compatibility test
+    it("should maintain backward compatibility with old interface", async () => {
+      const url = "https://example.com/api-spec.json"
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        text: async () => JSON.stringify(mockOpenAPISpec),
+      } as Response)
+
+      // Test the old interface (without specifying input method)
+      const result = await openAPILoader.loadOpenAPISpec(url)
+
+      expect(fetch).toHaveBeenCalledWith(url)
+      expect(result).toEqual(mockOpenAPISpec)
     })
   })
 

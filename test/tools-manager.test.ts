@@ -47,7 +47,11 @@ describe("ToolsManager", () => {
 
       await toolsManager.initialize()
 
-      expect(mockSpecLoader.loadOpenAPISpec).toHaveBeenCalledWith(mockConfig.openApiSpec)
+      expect(mockSpecLoader.loadOpenAPISpec).toHaveBeenCalledWith(
+        mockConfig.openApiSpec,
+        undefined,
+        undefined,
+      )
       expect(mockSpecLoader.parseOpenAPISpec).toHaveBeenCalledWith(mockSpec)
       expect((toolsManager as any).tools).toEqual(mockTools)
     })

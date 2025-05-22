@@ -69,7 +69,11 @@ export class ToolsManager {
    * Initialize tools from the OpenAPI specification
    */
   async initialize(): Promise<void> {
-    const spec = await this.specLoader.loadOpenAPISpec(this.config.openApiSpec)
+    const spec = await this.specLoader.loadOpenAPISpec(
+      this.config.openApiSpec,
+      this.config.specInputMethod,
+      this.config.inlineSpecContent,
+    )
     // Determine tools loading mode
     if (this.config.toolsMode === "dynamic") {
       // Use dynamic discovery meta-tools
