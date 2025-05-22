@@ -21,6 +21,7 @@ export interface OpenAPIMCPServerConfig {
   includeOperations?: string[]
   /** Tools loading mode: 'all' or 'dynamic' */
   toolsMode: "all" | "dynamic"
+  disableAbbreviation?: boolean
 }
 
 /**

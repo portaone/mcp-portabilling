@@ -184,6 +184,33 @@ paths:
     })
   })
 
+  describe("parseOpenAPISpec with disableAbbreviation", () => {
+    it("should not abbreviate tool names when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users/management/authorization-groups": {
+            get: {
+              operationId: "getUserManagementAuthorizationGroups",
+              summary: "Get all user management authorization groups",
+              responses: {}
+            }
+          }
+        }
+      }
+      
+      const tools = loader.parseOpenAPISpec(spec)
+      const toolId = Array.from(tools.keys())[0]
+      
+      // Should not be abbreviated
+      expect(toolId).toContain("GET-users-management-authorization-groups")
+      const tool = tools.get(toolId)!
+      expect(tool.name).toContain("get-user-management-authorization-groups")
+    })
+  })
+
   describe("parseOpenAPISpec", () => {
     it("should convert OpenAPI paths to MCP tools", () => {
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
@@ -629,6 +656,18 @@ paths:
       // Neither parameter should be required
       const required = tool!.inputSchema.required
       expect(required).toBeUndefined()
+    })
+  })
+
+  describe("disableAbbreviation", () => {
+    it("should not abbreviate operation IDs when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const longName = "ServiceUsersManagementController_updateServiceUsersAuthorityGroup"
+      const result = loader.abbreviateOperationId(longName)
+      
+      // Should not be abbreviated
+      expect(result).toContain("service-users-management-controller")
+      expect(result).toContain("update-service-users-authority-group")
     })
   })
 

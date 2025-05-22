@@ -9,6 +9,16 @@ import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviati
  * Class to load and parse OpenAPI specifications
  */
 export class OpenAPISpecLoader {
+
+  /**
+   * Disable name optimization
+   */
+  private disableAbbreviation: boolean
+
+  constructor(config?: { disableAbbreviation?: boolean }) {
+    this.disableAbbreviation = config?.disableAbbreviation ?? false
+  }
+
   /**
    * Load an OpenAPI specification from a file path or URL
    */
@@ -32,8 +42,7 @@ export class OpenAPISpecLoader {
         return yaml.load(specContent) as OpenAPIV3.Document
       } catch (yamlError) {
         throw new Error(
-          `Failed to parse OpenAPI spec as JSON or YAML: ${
-            (jsonError as Error).message
+          `Failed to parse OpenAPI spec as JSON or YAML: ${(jsonError as Error).message
           } | ${(yamlError as Error).message}`,
         )
       }
@@ -395,6 +404,7 @@ export class OpenAPISpecLoader {
   }
 
   public abbreviateOperationId(originalId: string, maxLength: number = 64): string {
+    maxLength = this.disableAbbreviation ? Number.MAX_SAFE_INTEGER : maxLength;
     const {
       currentName: sanitizedName,
       originalWasLong,
@@ -402,8 +412,13 @@ export class OpenAPISpecLoader {
     } = this._initialSanitizeAndValidate(originalId, maxLength)
     if (errorName) return errorName
 
-    let processedName = this._performSemanticAbbreviation(sanitizedName)
-    processedName = this._applyVowelRemovalIfOverLength(processedName, maxLength)
+    let processedName;
+    if (this.disableAbbreviation) {
+      processedName = this.splitCombined(sanitizedName).join("-");
+    } else {
+      processedName = this._performSemanticAbbreviation(sanitizedName)
+      processedName = this._applyVowelRemovalIfOverLength(processedName, maxLength)
+    }
     processedName = this._truncateAndApplyHashIfNeeded(
       processedName,
       originalId,
