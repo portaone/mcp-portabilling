@@ -123,7 +123,7 @@ export class OpenAPISpecLoader {
             method.toLowerCase(),
           )
         ) {
-          console.log(`Skipping non-HTTP method "${method}" for path ${path}`)
+          console.warn(`Skipping non-HTTP method "${method}" for path ${path}`)
           continue
         }
 

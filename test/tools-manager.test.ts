@@ -162,6 +162,25 @@ describe("ToolsManager", () => {
     })
   })
 
+  describe("getToolsWithIds", () => {
+    it("should return all tools with their IDs", async () => {
+      const mockTools = new Map([
+        ["GET-users", { name: "List Users" } as Tool],
+        ["POST-users", { name: "Create User" } as Tool],
+      ])
+
+      // Set up the tools map
+      vi.spyOn(toolsManager as any, "tools", "get").mockReturnValue(mockTools)
+
+      const toolsWithIds = toolsManager.getToolsWithIds()
+
+      expect(toolsWithIds).toEqual([
+        ["GET-users", { name: "List Users" }],
+        ["POST-users", { name: "Create User" }],
+      ])
+    })
+  })
+
   describe("findTool", () => {
     it("should find a tool by ID", () => {
       const mockTools = new Map([

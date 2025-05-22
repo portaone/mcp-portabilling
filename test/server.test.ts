@@ -38,8 +38,13 @@ const config: OpenAPIMCPServerConfig = {
 describe("OpenAPIServer", () => {
   let server: OpenAPIServer
   let mockServer: { setRequestHandler: Mock; connect: Mock }
-  let mockToolsManager: { initialize: Mock; getAllTools: Mock; findTool: Mock }
-  let mockApiClient: { executeApiCall: Mock }
+  let mockToolsManager: {
+    initialize: Mock
+    getAllTools: Mock
+    findTool: Mock
+    getToolsWithIds: Mock
+  }
+  let mockApiClient: { executeApiCall: Mock; setTools: Mock }
 
   type Mock = ReturnType<typeof vi.fn>
 
@@ -62,6 +67,7 @@ describe("OpenAPIServer", () => {
           initialize: vi.fn(),
           getAllTools: vi.fn().mockReturnValue([]),
           findTool: vi.fn(),
+          getToolsWithIds: vi.fn().mockReturnValue([]),
         }) as any,
     )
 
@@ -155,6 +161,36 @@ describe("OpenAPIServer", () => {
     await expect(server.start(transport)).resolves.toBeUndefined()
     expect(mockToolsManager.initialize).toHaveBeenCalled()
     expect(mockServer.connect).toHaveBeenCalledWith(transport)
+  })
+
+  it("should provide tools with their IDs to the API client when starting the server", async () => {
+    vi.mocked(mockToolsManager.initialize).mockResolvedValue(undefined)
+    vi.mocked(mockServer.connect).mockResolvedValue(undefined)
+
+    // Mock the tools with their IDs
+    const mockToolsWithIds = [
+      ["GET-users", { name: "list-users" }],
+      ["POST-users", { name: "create-user" }],
+    ]
+    vi.mocked(mockToolsManager.getToolsWithIds).mockReturnValue(mockToolsWithIds)
+
+    const transport = {
+      start: vi.fn().mockResolvedValue(undefined),
+      send: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as ServerTransport
+
+    await server.start(transport)
+
+    // Verify that getToolsWithIds is called
+    expect(mockToolsManager.getToolsWithIds).toHaveBeenCalled()
+
+    // Verify that setTools is called with a map containing the correct tool IDs and tools
+    const expectedToolsMap = new Map([
+      ["GET-users", { name: "list-users" }],
+      ["POST-users", { name: "create-user" }],
+    ])
+    expect(mockApiClient.setTools).toHaveBeenCalledWith(expectedToolsMap)
   })
 
   it("should advertise tools capabilities in initialization response", () => {

@@ -14,7 +14,7 @@ export class ToolsManager {
     // Ensure toolsMode has a default value of 'all'
     this.config.toolsMode = this.config.toolsMode || "all"
     this.specLoader = new OpenAPISpecLoader({
-      disableAbbreviation: this.config.disableAbbreviation
+      disableAbbreviation: this.config.disableAbbreviation,
     })
   }
 
@@ -154,6 +154,14 @@ export class ToolsManager {
    */
   getAllTools(): Tool[] {
     return Array.from(this.tools.values())
+  }
+
+  /**
+   * Get all available tools with their IDs
+   * Returns array of [toolId, tool] pairs
+   */
+  getToolsWithIds(): [string, Tool][] {
+    return Array.from(this.tools.entries())
   }
 
   /**

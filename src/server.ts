@@ -104,12 +104,9 @@ export class OpenAPIServer {
     await this.toolsManager.initialize()
     // Pass the tools to the API client
     const toolsMap = new Map<string, Tool>()
-    this.toolsManager.getAllTools().forEach((tool) => {
-      const toolInfo = this.toolsManager.findTool(tool.name)
-      if (toolInfo) {
-        toolsMap.set(toolInfo.toolId, tool)
-      }
-    })
+    for (const [toolId, tool] of this.toolsManager.getToolsWithIds()) {
+      toolsMap.set(toolId, tool)
+    }
     this.apiClient.setTools(toolsMap)
     await this.server.connect(transport)
   }
