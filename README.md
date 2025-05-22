@@ -215,7 +215,7 @@ To see debug logs:
 
 2. When using HTTP transport:
    ```bash
-   npx @ivotoby/openapi-mcp-server --transport http 2>debug.log
+   npx @ivotoby/openapi-mcp-server --transport http &2>debug.log
    ```
 
 ## For Developers
