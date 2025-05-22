@@ -126,6 +126,7 @@ The server can be configured through environment variables or command line argum
 - `HTTP_HOST` - Host for HTTP transport (default: "127.0.0.1")
 - `ENDPOINT_PATH` - Endpoint path for HTTP transport (default: "/mcp")
 - `TOOLS_MODE` - Tools loading mode: "all" (load all endpoint-based tools) or "dynamic" (load only meta-tools) (default: "all")
+- `DISABLE_ABBREVIATION` - Disable name optimization (this could throw errors when name is > 64 chars)
 
 ### Command Line Arguments
 
@@ -139,7 +140,8 @@ npx @ivotoby/openapi-mcp-server \
   --transport http \
   --port 3000 \
   --host 127.0.0.1 \
-  --path /mcp
+  --path /mcp \
+  --disable-abbreviation true
 ```
 
 ### OpenAPI Schema Processing
