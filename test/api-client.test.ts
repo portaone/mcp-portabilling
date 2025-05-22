@@ -295,6 +295,51 @@ describe("ApiClient", () => {
       // Restore original parseToolId
       ;(apiClient as any).parseToolId = originalParseToolId
     })
+
+    it("should properly escape regex special characters in parameter keys", async () => {
+      // Create a mock tool with a parameter key that contains regex special characters
+      const mockTool = {
+        name: "get-data-with-special-param",
+        description: "Get data with a parameter that has special regex characters",
+        inputSchema: {
+          type: "object",
+          properties: {
+            "param.with*special+chars": {
+              // Parameter with regex special characters
+              type: "string",
+              description: "Parameter with special characters",
+              "x-parameter-location": "path",
+            },
+          },
+        },
+      }
+
+      // Set up the tool in the client
+      const toolsMap = new Map()
+      toolsMap.set("GET-data-param", mockTool)
+      apiClient.setTools(toolsMap)
+
+      // Mock the parseToolId method to return a path with special parameter
+      const originalParseToolId = (apiClient as any).parseToolId
+      ;(apiClient as any).parseToolId = vi.fn().mockReturnValue({
+        method: "get",
+        path: "/data/{param.with*special+chars}",
+      })
+
+      // Execute the call
+      await apiClient.executeApiCall("GET-data-param", { "param.with*special+chars": "value123" })
+
+      // Verify the correct URL was constructed
+      expect(mockAxiosInstance).toHaveBeenCalledWith({
+        method: "get",
+        url: "/data/value123",
+        headers: { "X-API-Key": "test-key" },
+        params: {},
+      })
+
+      // Restore original parseToolId
+      ;(apiClient as any).parseToolId = originalParseToolId
+    })
   })
 
   describe("parseToolId", () => {

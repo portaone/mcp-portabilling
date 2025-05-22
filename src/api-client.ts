@@ -61,6 +61,11 @@ export class ApiClient {
       const paramsCopy: Record<string, any> = { ...params }
       let resolvedPath = path
 
+      // Helper function to escape regex special characters
+      const escapeRegExp = (str: string): string => {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // $& means the whole matched string
+      }
+
       // Handle path parameters
       if (toolDef?.inputSchema?.properties) {
         // Check each parameter to see if it's a path parameter
@@ -72,8 +77,10 @@ export class ApiClient {
 
           // If it's a path parameter, interpolate it into the URL and remove from params
           if (paramLocation === "path") {
+            // Escape key before using it in regex patterns
+            const escapedKey = escapeRegExp(key)
             // Try standard OpenAPI and Express-style parameters first
-            const paramRegex = new RegExp(`\\{${key}\\}|:${key}(?:\\/|$)`, "g")
+            const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
 
             // If specific parameter style was found, use it
             if (paramRegex.test(resolvedPath)) {
@@ -92,8 +99,10 @@ export class ApiClient {
         // Fallback behavior if tool definition is not available
         for (const key of Object.keys(paramsCopy)) {
           const value = paramsCopy[key]
+          // Escape key before using it in regex patterns
+          const escapedKey = escapeRegExp(key)
           // First try standard OpenAPI and Express-style parameters
-          const paramRegex = new RegExp(`\\{${key}\\}|:${key}(?:\\/|$)`, "g")
+          const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
 
           // If found, replace using regex
           if (paramRegex.test(resolvedPath)) {
