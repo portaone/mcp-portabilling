@@ -73,9 +73,9 @@ function demonstratePathParameterHandling() {
   console.log("Case 2: Multiple path parameters with OpenAPI definition")
   console.log("----------------------------------------------------")
   const pathDefs2 = {
-    orderId: { location: "path" },
-    itemId: { location: "path" },
-    withDetails: { location: "query" },
+    orderId: { 'x-parameter-location': "path" },
+    itemId: { 'x-parameter-location': "path" },
+    withDetails: { 'x-parameter-location': "query" },
   }
   const result2 = processUrl(
     "/store/order/orderId/item/itemId",
