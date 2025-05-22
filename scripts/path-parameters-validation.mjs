@@ -62,8 +62,8 @@ function demonstratePathParameterHandling() {
   console.log("Case 1: Simple path parameter with OpenAPI definition")
   console.log("--------------------------------------------------")
   const pathDefs1 = {
-    petId: { location: "path" },
-    format: { location: "query" },
+    petId: { 'x-parameter-location': "path" },
+    format: { 'x-parameter-location': "query" },
   }
   const result1 = processUrl("/pet/petId", { petId: 1, format: "json" }, pathDefs1)
   console.log(`URL: ${result1.url}`)
