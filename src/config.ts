@@ -11,6 +11,17 @@ export interface OpenAPIMCPServerConfig {
   httpPort?: number
   httpHost?: string
   endpointPath?: string
+  /** Filter only specific tool IDs or names */
+  includeTools?: string[]
+  /** Filter only specific tags */
+  includeTags?: string[]
+  /** Filter only specific resources (path prefixes) */
+  includeResources?: string[]
+  /** Filter only specific HTTP methods: get,post,put,... */
+  includeOperations?: string[]
+  /** Tools loading mode: 'all' or 'dynamic' */
+  toolsMode: "all" | "dynamic"
+  disableAbbreviation?: boolean
 }
 
 /**
@@ -76,6 +87,35 @@ export function loadConfig(): OpenAPIMCPServerConfig {
       type: "string",
       description: "Server version",
     })
+    .option("tools", {
+      type: "string",
+      choices: ["all", "dynamic"],
+      description: "Which tools to load: all or dynamic meta-tools",
+    })
+    .option("tool", {
+      type: "array",
+      string: true,
+      description: "Import only specified tool IDs or names",
+    })
+    .option("tag", {
+      type: "array",
+      string: true,
+      description: "Import only tools with specified OpenAPI tags",
+    })
+    .option("resource", {
+      type: "array",
+      string: true,
+      description: "Import only tools under specified resource path prefixes",
+    })
+    .option("operation", {
+      type: "array",
+      string: true,
+      description: "Import only tools for specified HTTP methods (e.g., get, post)",
+    })
+    .option("disable-abbreviation", {
+      type: "boolean",
+      description: "Disable name optimization",
+    })
     .help()
     .parseSync()
 
@@ -95,6 +135,7 @@ export function loadConfig(): OpenAPIMCPServerConfig {
   // Combine CLI args and env vars, with CLI taking precedence
   const apiBaseUrl = argv["api-base-url"] || process.env.API_BASE_URL
   const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH
+  const disableAbbreviation = argv["disable-abbreviation"] || (process.env.DISABLE_ABBREVIATION ? process.env.DISABLE_ABBREVIATION === 'true' : false)
 
   if (!apiBaseUrl) {
     throw new Error("API base URL is required (--api-base-url or API_BASE_URL)")
@@ -115,5 +156,11 @@ export function loadConfig(): OpenAPIMCPServerConfig {
     httpPort,
     httpHost,
     endpointPath,
+    includeTools: argv.tool as string[] | undefined,
+    includeTags: argv.tag as string[] | undefined,
+    includeResources: argv.resource as string[] | undefined,
+    includeOperations: argv.operation as string[] | undefined,
+    toolsMode: (argv.tools as "all" | "dynamic") || process.env.TOOLS_MODE || "all",
+    disableAbbreviation: disableAbbreviation ? true : undefined,
   }
 }

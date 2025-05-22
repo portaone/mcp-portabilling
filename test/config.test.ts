@@ -107,6 +107,11 @@ describe("loadConfig", () => {
       httpPort: 3000,
       httpHost: "127.0.0.1",
       endpointPath: "/mcp",
+      includeTools: undefined,
+      includeTags: undefined,
+      includeResources: undefined,
+      includeOperations: undefined,
+      toolsMode: "all",
     })
   })
 
@@ -194,6 +199,11 @@ describe("loadConfig", () => {
       httpPort: 3000,
       httpHost: "127.0.0.1",
       endpointPath: "/mcp",
+      includeTools: undefined,
+      includeTags: undefined,
+      includeResources: undefined,
+      includeOperations: undefined,
+      toolsMode: "all",
     })
   })
 
@@ -221,5 +231,107 @@ describe("loadConfig", () => {
     expect(config.name).toBe("mcp-openapi-server")
     expect(config.version).toBe("1.0.0")
     expect(config.transportType).toBe("stdio")
+  })
+
+  it("should handle disableAbbreviation from command line and environment", async () => {
+    // Test with command line argument
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+          "disable-abbreviation": true
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    // Import the module after setting up mocks
+    let { loadConfig } = await import("../src/config")
+    let config = loadConfig()
+    expect(config.disableAbbreviation).toBe(true)
+
+    // Reset modules for next test
+    vi.resetModules()
+
+    // Test with environment variable (string 'true')
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    process.env.DISABLE_ABBREVIATION = 'true'
+    
+    // Import the module again after resetting
+    const configModule = await import("../src/config")
+    loadConfig = configModule.loadConfig
+    config = loadConfig()
+    expect(config.disableAbbreviation).toBe(true)
+
+    // Reset modules for next test
+    vi.resetModules()
+
+    // Test with environment variable (string 'false')
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    process.env.DISABLE_ABBREVIATION = 'false'
+    
+    // Import the module again after resetting
+    const configModule2 = await import("../src/config")
+    loadConfig = configModule2.loadConfig
+    config = loadConfig()
+    expect(config.disableAbbreviation).toBeUndefined()
+
+    // Test default value (undefined)
+    vi.resetModules()
+    delete process.env.DISABLE_ABBREVIATION
+
+    vi.doMock("yargs", () => ({
+      default: vi.fn().mockReturnValue({
+        option: vi.fn().mockReturnThis(),
+        help: vi.fn().mockReturnThis(),
+        parseSync: vi.fn().mockReturnValue({
+          "api-base-url": "https://api.example.com",
+          "openapi-spec": "./spec.json",
+        }),
+      }),
+    }))
+
+    vi.doMock("yargs/helpers", () => ({
+      hideBin: vi.fn((arr) => arr),
+    }))
+
+    const configModule3 = await import("../src/config")
+    loadConfig = configModule3.loadConfig
+    config = loadConfig()
+    expect(config.disableAbbreviation).toBeUndefined()
   })
 })

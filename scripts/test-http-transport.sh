@@ -16,6 +16,7 @@ while [[ "$#" -gt 0 ]]; do
     --path) PATH="$2"; shift ;;
     --api-base-url) API_BASE_URL="$2"; shift ;;
     --openapi-spec) OPENAPI_SPEC="$2"; shift ;;
+    --disable-abbreviation) DISABLE_ABBREVIATION="$2"; shift ;;
     *) echo "Unknown parameter: $1"; exit 1 ;;
   esac
   shift
@@ -30,6 +31,7 @@ show_usage() {
   echo "  --path PATH         Path (default: /mcp)"
   echo "  --api-base-url URL  API base URL"
   echo "  --openapi-spec URL  OpenAPI spec URL"
+  echo "  --disable-abbreviation Boolean  Disable name optimization"
   exit 1
 }
 
@@ -55,7 +57,8 @@ node dist/bundle.js \
   --host $HOST \
   --path $PATH \
   --api-base-url $API_BASE_URL \
-  --openapi-spec $OPENAPI_SPEC &
+  --openapi-spec $OPENAPI_SPEC \
+  --disable-abbreviation $DISABLE_ABBREVIATION &
 
 SERVER_PID=$!
 
