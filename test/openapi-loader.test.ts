@@ -195,15 +195,15 @@ paths:
             get: {
               operationId: "getUserManagementAuthorizationGroups",
               summary: "Get all user management authorization groups",
-              responses: {}
-            }
-          }
-        }
+              responses: {},
+            },
+          },
+        },
       }
-      
+
       const tools = loader.parseOpenAPISpec(spec)
       const toolId = Array.from(tools.keys())[0]
-      
+
       // Should not be abbreviated
       expect(toolId).toContain("GET-users-management-authorization-groups")
       const tool = tools.get(toolId)!
@@ -554,11 +554,13 @@ paths:
       expect(properties.id).toEqual({
         type: "string",
         description: "Item identifier",
+        "x-parameter-location": "path",
       })
 
       expect(properties.limit).toEqual({
         type: "integer",
         description: "Maximum number of results",
+        "x-parameter-location": "query",
       })
 
       // Verify that required parameters were correctly identified
@@ -634,6 +636,7 @@ paths:
       const filterParam = properties.filter as Record<string, any>
       expect(filterParam.type).toBe("object")
       expect(filterParam.description).toBe("Product filtering options")
+      expect(filterParam["x-parameter-location"]).toBe("query")
       // Check that nested properties are preserved
       expect(filterParam.properties).toBeDefined()
       expect(filterParam.properties.category).toBeDefined()
@@ -646,6 +649,7 @@ paths:
       const paginationParam = properties.pagination as Record<string, any>
       expect(paginationParam.type).toBe("object")
       expect(paginationParam.description).toBe("Pagination options")
+      expect(paginationParam["x-parameter-location"]).toBe("query")
       // Check that nested properties with defaults are preserved
       expect(paginationParam.properties).toBeDefined()
       expect(paginationParam.properties.page).toBeDefined()
@@ -666,7 +670,7 @@ paths:
       const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
       const longName = "ServiceUsersManagementController_updateServiceUsersAuthorityGroup"
       const result = loader.abbreviateOperationId(longName)
-      
+
       // Should not be abbreviated
       expect(result).toContain("service-users-management-controller")
       expect(result).toContain("update-service-users-authority-group")

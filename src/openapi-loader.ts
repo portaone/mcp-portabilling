@@ -149,29 +149,45 @@ export class OpenAPISpecLoader {
         // Merge parameters into inputSchema
         if (op.parameters) {
           for (const param of op.parameters) {
-            let paramObj: OpenAPIV3.ParameterObject
+            let paramObj: OpenAPIV3.ParameterObject | undefined // To hold the (potentially resolved) parameter
 
             // Handle parameter references by resolving them
-            if (!("name" in param)) {
-              // This is a reference, attempt to resolve it
-              if ("$ref" in param && typeof param.$ref === "string") {
-                const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
-                if (refMatch && spec.components?.parameters) {
-                  const paramName = refMatch[1]
-                  const resolvedParam = spec.components.parameters[paramName]
+            if ("$ref" in param && typeof param.$ref === "string") {
+              const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
+              if (refMatch && spec.components?.parameters) {
+                const paramNameFromRef = refMatch[1]
+                const resolvedParam = spec.components.parameters[paramNameFromRef]
 
-                  // Skip if we can't resolve the reference
-                  if (!resolvedParam || !("name" in resolvedParam)) continue
-
+                // Ensure resolvedParam is a ParameterObject
+                if (resolvedParam && "name" in resolvedParam && "in" in resolvedParam) {
                   paramObj = resolvedParam as OpenAPIV3.ParameterObject
                 } else {
-                  continue // Skip unresolvable references
+                  console.warn(
+                    `Could not resolve parameter reference or invalid structure: ${param.$ref}`,
+                  )
+                  continue
                 }
               } else {
-                continue // Skip if not a proper $ref
+                console.warn(`Could not parse parameter reference: ${param.$ref}`)
+                continue
               }
-            } else {
+            } else if ("name" in param && "in" in param) {
+              // Direct parameter object
               paramObj = param as OpenAPIV3.ParameterObject
+            } else {
+              // This case implies an invalid parameter structure that isn't a $ref and isn't a valid direct parameter.
+              console.warn(
+                "Skipping parameter due to missing 'name' or 'in' properties and not being a valid $ref:",
+                param,
+              )
+              continue
+            }
+
+            // If paramObj is still undefined here, it means the parameter could not be processed.
+            if (!paramObj) {
+              // This should theoretically be caught by the continue statements above.
+              console.warn("Failed to process a parameter (paramObj is undefined):", param)
+              continue
             }
 
             if (paramObj.schema) {
@@ -182,26 +198,64 @@ export class OpenAPISpecLoader {
                 new Set<string>(),
               )
 
-              // Create the parameter with just the essential properties first
+              // Create the parameter definition
               const paramDef: any = {
                 description: paramObj.description || `${paramObj.name} parameter`,
+                "x-parameter-location": paramObj.in, // Store parameter location (path, query, etc.)
               }
 
-              // Preserve the type
-              if (paramSchema.type) {
-                paramDef.type = paramSchema.type
+              // Handle schema type assignment
+              if (Object.keys(paramSchema).length === 0 && typeof paramSchema !== "boolean") {
+                // Check for boolean type as well, since SchemaObject can be boolean
+                // An empty object might result from cycle removal in inlineSchema
+                console.warn(
+                  `Parameter '${paramObj.name}' schema was empty after inlining (potential cycle or unresolvable ref), defaulting to string.`,
+                )
+                paramDef.type = "string"
+              } else if (typeof paramSchema === "boolean") {
+                // If the schema is a boolean (true/false for allowing any/no value)
+                // We represent this as a simple boolean type for the tool schema.
+                // Or, decide on a convention (e.g. typeless, or specific string type)
+                paramDef.type = "boolean" // Or handle as per desired convention
               } else {
-                paramDef.type = "string" // Default to string if no type specified
+                // Preserve the type if explicitly set in the schema
+                if (paramSchema.type) {
+                  paramDef.type = paramSchema.type
+                } else {
+                  // If no explicit type, infer if it's an object/array if properties/items exist.
+                  // Otherwise, default to "string" if no other structural clues are present.
+                  const hasProperties =
+                    "properties" in paramSchema &&
+                    paramSchema.properties &&
+                    Object.keys(paramSchema.properties).length > 0
+                  const hasItems =
+                    paramSchema.type === "array" &&
+                    !!(paramSchema as OpenAPIV3.ArraySchemaObject).items
+                  const hasComposition =
+                    ("allOf" in paramSchema && paramSchema.allOf && paramSchema.allOf.length > 0) ||
+                    ("anyOf" in paramSchema && paramSchema.anyOf && paramSchema.anyOf.length > 0) ||
+                    ("oneOf" in paramSchema && paramSchema.oneOf && paramSchema.oneOf.length > 0)
+
+                  if (!hasProperties && !hasItems && !hasComposition) {
+                    // If no explicit type AND no clear structural elements, default to string.
+                    // This is a fallback; ideally, schemas should be more specific.
+                    paramDef.type = "string"
+                  }
+                  // If it has structure (properties, items, allOf, etc.) but no explicit 'type',
+                  // the 'type' field in the output JSON schema can be omitted.
+                  // JSON Schema validators can often infer 'object' if 'properties' is present,
+                  // or 'array' if 'items' is present.
+                }
               }
 
-              // Copy relevant properties from the inlined schema
-              // This preserves nested structures while avoiding type issues
-              for (const [key, value] of Object.entries(paramSchema)) {
-                // Skip the type and properties already set
-                if (key === "type" || key === "description") continue
-
-                // Copy the property
-                paramDef[key] = value
+              // Copy all other relevant properties from the inlined schema to paramDef
+              // Avoid overwriting already set 'description' or 'type' unless schema has them.
+              if (typeof paramSchema === "object" && paramSchema !== null) {
+                for (const [key, value] of Object.entries(paramSchema)) {
+                  if (key === "description" && paramDef.description) continue // Keep existing if already set
+                  if (key === "type" && paramDef.type) continue // Keep existing if already set
+                  paramDef[key] = value
+                }
               }
 
               // Add the schema to the tool's input schema properties
