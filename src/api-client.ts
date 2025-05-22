@@ -1,10 +1,12 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
+import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
 /**
  * Client for making API calls to the backend service
  */
 export class ApiClient {
   private axiosInstance: AxiosInstance
+  private toolsMap: Map<string, Tool> = new Map()
 
   /**
    * Create a new API client
@@ -22,6 +24,25 @@ export class ApiClient {
   }
 
   /**
+   * Set the available tools for the client
+   *
+   * @param tools - Map of tool ID to tool definition
+   */
+  setTools(tools: Map<string, Tool>): void {
+    this.toolsMap = tools
+  }
+
+  /**
+   * Get a tool definition by ID
+   *
+   * @param toolId - The tool ID
+   * @returns The tool definition if found
+   */
+  private getToolDefinition(toolId: string): Tool | undefined {
+    return this.toolsMap.get(toolId)
+  }
+
+  /**
    * Execute an API call based on the tool ID and parameters
    *
    * @param toolId - The tool ID in format METHOD-path-parts
@@ -33,20 +54,86 @@ export class ApiClient {
       // Parse method and path from the tool ID
       const { method, path } = this.parseToolId(toolId)
 
+      // Get the tool definition, if available
+      const toolDef = this.getToolDefinition(toolId)
+
+      // Interpolate path parameters into the URL and remove them from params
+      const paramsCopy: Record<string, any> = { ...params }
+      let resolvedPath = path
+
+      // Helper function to escape regex special characters
+      const escapeRegExp = (str: string): string => {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // $& means the whole matched string
+      }
+
+      // Handle path parameters
+      if (toolDef?.inputSchema?.properties) {
+        // Check each parameter to see if it's a path parameter
+        for (const [key, value] of Object.entries(paramsCopy)) {
+          const paramDef = toolDef.inputSchema.properties[key]
+          // Get the parameter location from the extended schema
+          const paramDef_any = paramDef as any
+          const paramLocation = paramDef_any?.["x-parameter-location"]
+
+          // If it's a path parameter, interpolate it into the URL and remove from params
+          if (paramLocation === "path") {
+            // Escape key before using it in regex patterns
+            const escapedKey = escapeRegExp(key)
+            // Try standard OpenAPI and Express-style parameters first
+            const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
+
+            // If specific parameter style was found, use it
+            if (paramRegex.test(resolvedPath)) {
+              resolvedPath = resolvedPath.replace(
+                paramRegex,
+                (match) => encodeURIComponent(value) + (match.endsWith("/") ? "/" : ""),
+              )
+            } else {
+              // Fall back to the original simple replacement for backward compatibility
+              resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            }
+            delete paramsCopy[key]
+          }
+        }
+      } else {
+        // Fallback behavior if tool definition is not available
+        for (const key of Object.keys(paramsCopy)) {
+          const value = paramsCopy[key]
+          // Escape key before using it in regex patterns
+          const escapedKey = escapeRegExp(key)
+          // First try standard OpenAPI and Express-style parameters
+          const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
+
+          // If found, replace using regex
+          if (paramRegex.test(resolvedPath)) {
+            resolvedPath = resolvedPath.replace(
+              paramRegex,
+              (match) => encodeURIComponent(value) + (match.endsWith("/") ? "/" : ""),
+            )
+            delete paramsCopy[key]
+          }
+          // Fall back to original simple replacement for backward compatibility
+          else if (resolvedPath.includes(`/${key}`)) {
+            resolvedPath = resolvedPath.replace(`/${key}`, `/${encodeURIComponent(value)}`)
+            delete paramsCopy[key]
+          }
+        }
+      }
+
       // Prepare request configuration
       const config: any = {
         method: method.toLowerCase(),
-        url: path,
+        url: resolvedPath,
         headers: this.headers,
       }
 
       // Handle parameters based on HTTP method
       if (["get", "delete", "head", "options"].includes(method.toLowerCase())) {
         // For GET-like methods, parameters go in the query string
-        config.params = this.processQueryParams(params)
+        config.params = this.processQueryParams(paramsCopy)
       } else {
         // For POST-like methods, parameters go in the request body
-        config.data = params
+        config.data = paramsCopy
       }
 
       // Execute the request
