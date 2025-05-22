@@ -28,6 +28,9 @@ if (process.env.SERVER_NAME) {
 if (process.env.API_HEADERS) {
   args.push(`--headers=${process.env.API_HEADERS}`);
 }
+if (process.env.DISABLE_ABBREVIATION) {
+  args.push(`--disable-abbreviation=${process.env.DISABLE_ABBREVIATION}`);
+}
 
 // Execute the command
 import { spawn } from 'child_process';

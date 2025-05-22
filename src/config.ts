@@ -112,6 +112,10 @@ export function loadConfig(): OpenAPIMCPServerConfig {
       string: true,
       description: "Import only tools for specified HTTP methods (e.g., get, post)",
     })
+    .option("disable-abbreviation", {
+      type: "boolean",
+      description: "Disable name optimization",
+    })
     .help()
     .parseSync()
 
@@ -131,6 +135,7 @@ export function loadConfig(): OpenAPIMCPServerConfig {
   // Combine CLI args and env vars, with CLI taking precedence
   const apiBaseUrl = argv["api-base-url"] || process.env.API_BASE_URL
   const openApiSpec = argv["openapi-spec"] || process.env.OPENAPI_SPEC_PATH
+  const disableAbbreviation = argv["disable-abbreviation"] || (process.env.DISABLE_ABBREVIATION ? process.env.DISABLE_ABBREVIATION === 'true' : false)
 
   if (!apiBaseUrl) {
     throw new Error("API base URL is required (--api-base-url or API_BASE_URL)")
@@ -156,5 +161,6 @@ export function loadConfig(): OpenAPIMCPServerConfig {
     includeResources: argv.resource as string[] | undefined,
     includeOperations: argv.operation as string[] | undefined,
     toolsMode: (argv.tools as "all" | "dynamic") || process.env.TOOLS_MODE || "all",
+    disableAbbreviation: disableAbbreviation ? true : undefined,
   }
 }
