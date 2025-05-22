@@ -6,6 +6,11 @@ import crypto from "crypto"
 import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
 
 /**
+ * Spec input method type
+ */
+export type SpecInputMethod = "url" | "file" | "stdin" | "inline"
+
+/**
  * Class to load and parse OpenAPI specifications
  */
 export class OpenAPISpecLoader {
@@ -19,18 +24,103 @@ export class OpenAPISpecLoader {
   }
 
   /**
-   * Load an OpenAPI specification from a file path or URL
+   * Load an OpenAPI specification from various sources
    */
-  async loadOpenAPISpec(specPathOrUrl: string): Promise<OpenAPIV3.Document> {
+  async loadOpenAPISpec(
+    specPathOrUrl: string,
+    inputMethod: SpecInputMethod = "url",
+    inlineContent?: string,
+  ): Promise<OpenAPIV3.Document> {
     let specContent: string
-    if (specPathOrUrl.startsWith("http://") || specPathOrUrl.startsWith("https://")) {
-      const response = await fetch(specPathOrUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch OpenAPI spec from URL: ${specPathOrUrl}`)
+
+    try {
+      switch (inputMethod) {
+        case "url":
+          specContent = await this.loadFromUrl(specPathOrUrl)
+          break
+        case "file":
+          specContent = await this.loadFromFile(specPathOrUrl)
+          break
+        case "stdin":
+          specContent = await this.loadFromStdin()
+          break
+        case "inline":
+          if (!inlineContent) {
+            throw new Error("Inline content is required when using 'inline' input method")
+          }
+          specContent = inlineContent
+          break
+        default:
+          throw new Error(`Unsupported input method: ${inputMethod}`)
       }
-      specContent = await response.text()
-    } else {
-      specContent = await readFile(specPathOrUrl, "utf-8")
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Failed to load OpenAPI spec from ${inputMethod}: ${error.message}`)
+      }
+      throw error
+    }
+
+    return this.parseSpecContent(specContent, inputMethod)
+  }
+
+  /**
+   * Load spec content from URL
+   */
+  private async loadFromUrl(url: string): Promise<string> {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    return await response.text()
+  }
+
+  /**
+   * Load spec content from local file
+   */
+  private async loadFromFile(filePath: string): Promise<string> {
+    return await readFile(filePath, "utf-8")
+  }
+
+  /**
+   * Load spec content from standard input
+   */
+  private async loadFromStdin(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let data = ""
+
+      // Set stdin to read mode
+      process.stdin.setEncoding("utf8")
+
+      // Handle data chunks
+      process.stdin.on("data", (chunk) => {
+        data += chunk
+      })
+
+      // Handle end of input
+      process.stdin.on("end", () => {
+        if (data.trim().length === 0) {
+          reject(new Error("No data received from stdin"))
+        } else {
+          resolve(data)
+        }
+      })
+
+      // Handle errors
+      process.stdin.on("error", (error) => {
+        reject(new Error(`Error reading from stdin: ${error.message}`))
+      })
+
+      // Resume stdin to start reading
+      process.stdin.resume()
+    })
+  }
+
+  /**
+   * Parse spec content as JSON or YAML
+   */
+  private parseSpecContent(specContent: string, source: string): OpenAPIV3.Document {
+    if (!specContent || specContent.trim().length === 0) {
+      throw new Error(`Empty or invalid spec content from ${source}`)
     }
 
     // Attempt to parse as JSON, then YAML if JSON parsing fails
@@ -38,12 +128,16 @@ export class OpenAPISpecLoader {
       return JSON.parse(specContent) as OpenAPIV3.Document
     } catch (jsonError) {
       try {
-        return yaml.load(specContent) as OpenAPIV3.Document
+        const yamlResult = yaml.load(specContent) as OpenAPIV3.Document
+        if (!yamlResult || typeof yamlResult !== "object") {
+          throw new Error("YAML parsing resulted in invalid object")
+        }
+        return yamlResult
       } catch (yamlError) {
         throw new Error(
-          `Failed to parse OpenAPI spec as JSON or YAML: ${
+          `Failed to parse as JSON or YAML. JSON error: ${
             (jsonError as Error).message
-          } | ${(yamlError as Error).message}`,
+          }. YAML error: ${(yamlError as Error).message}`,
         )
       }
     }

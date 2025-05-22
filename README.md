@@ -118,6 +118,8 @@ The server can be configured through environment variables or command line argum
 
 - `API_BASE_URL` - Base URL for the API endpoints
 - `OPENAPI_SPEC_PATH` - Path or URL to OpenAPI specification
+- `OPENAPI_SPEC_FROM_STDIN` - Set to "true" to read OpenAPI spec from standard input
+- `OPENAPI_SPEC_INLINE` - Provide OpenAPI spec content directly as a string
 - `API_HEADERS` - Comma-separated key:value pairs for API headers
 - `SERVER_NAME` - Name for the MCP server (default: "mcp-openapi-server")
 - `SERVER_VERSION` - Version of the server (default: "1.0.0")
@@ -136,13 +138,112 @@ npx @ivotoby/openapi-mcp-server \
   --openapi-spec https://api.example.com/openapi.json \
   --headers "Authorization:Bearer token123,X-API-Key:your-api-key" \
   --name "my-mcp-server" \
-  --version "1.0.0" \
+  --server-version "1.0.0" \
   --transport http \
   --port 3000 \
   --host 127.0.0.1 \
   --path /mcp \
   --disable-abbreviation true
 ```
+
+## OpenAPI Specification Loading
+
+The MCP server supports multiple methods for loading OpenAPI specifications, providing flexibility for different deployment scenarios:
+
+### 1. URL Loading (Default)
+
+Load the OpenAPI spec from a remote URL:
+
+```bash
+npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com \
+  --openapi-spec https://api.example.com/openapi.json
+```
+
+### 2. Local File Loading
+
+Load the OpenAPI spec from a local file:
+
+```bash
+npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com \
+  --openapi-spec ./path/to/openapi.yaml
+```
+
+### 3. Standard Input Loading
+
+Read the OpenAPI spec from standard input (useful for piping or containerized environments):
+
+```bash
+# Pipe from file
+cat openapi.json | npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com \
+  --spec-from-stdin
+
+# Pipe from curl
+curl -s https://api.example.com/openapi.json | npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com \
+  --spec-from-stdin
+
+# Using environment variable
+export OPENAPI_SPEC_FROM_STDIN=true
+echo '{"openapi": "3.0.0", ...}' | npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com
+```
+
+### 4. Inline Specification
+
+Provide the OpenAPI spec content directly as a command line argument:
+
+```bash
+npx @ivotoby/openapi-mcp-server \
+  --api-base-url https://api.example.com \
+  --spec-inline '{"openapi": "3.0.0", "info": {"title": "My API", "version": "1.0.0"}, "paths": {}}'
+
+# Using environment variable
+export OPENAPI_SPEC_INLINE='{"openapi": "3.0.0", ...}'
+npx @ivotoby/openapi-mcp-server --api-base-url https://api.example.com
+```
+
+### Supported Formats
+
+All loading methods support both JSON and YAML formats. The server automatically detects the format and parses accordingly.
+
+### Docker and Container Usage
+
+For containerized deployments, you can mount OpenAPI specs or use stdin:
+
+```bash
+# Mount local file
+docker run -v /path/to/spec:/app/spec.json your-mcp-server \
+  --api-base-url https://api.example.com \
+  --openapi-spec /app/spec.json
+
+# Use stdin with docker
+cat openapi.json | docker run -i your-mcp-server \
+  --api-base-url https://api.example.com \
+  --spec-from-stdin
+```
+
+### Error Handling
+
+The server provides detailed error messages for spec loading failures:
+
+- **URL loading**: HTTP status codes and network errors
+- **File loading**: File system errors (not found, permissions, etc.)
+- **Stdin loading**: Empty input or read errors
+- **Inline loading**: Missing content errors
+- **Parsing errors**: Detailed JSON/YAML syntax error messages
+
+### Validation
+
+Only one specification source can be used at a time. The server will validate that exactly one of the following is provided:
+
+- `--openapi-spec` (URL or file path)
+- `--spec-from-stdin`
+- `--spec-inline`
+
+If multiple sources are specified, the server will exit with an error message.
 
 ### OpenAPI Schema Processing
 
