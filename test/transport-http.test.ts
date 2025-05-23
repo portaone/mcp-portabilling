@@ -67,8 +67,9 @@ describe("StreamableHttpServerTransport", () => {
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test", version: "1.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
@@ -546,12 +547,13 @@ describe("StreamableHttpServerTransport", () => {
 
     // Create init request data
     const initData = {
-      jsonrpc: "2.0",
+      jsonrpc: "2.0" as const,
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test-client", version: "1.0.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
@@ -634,12 +636,13 @@ describe("StreamableHttpServerTransport", () => {
 
     // Create init request
     const initData = {
-      jsonrpc: "2.0",
+      jsonrpc: "2.0" as const,
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test-client", version: "1.0.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
@@ -819,6 +822,225 @@ describe("StreamableHttpServerTransport", () => {
       }
       throw e
     }
+  })
+
+  it("should handle full HTTP initialize request flow and reject invalid format", async () => {
+    // This test simulates the exact scenario from the GitHub issue
+    // It tests the full HTTP request flow, not just the handleInitializeRequest method
+
+    transport.onmessage = vi.fn()
+    const transportAny = transport as any
+
+    // Test 1: Invalid format (the old format that was in the README)
+    const invalidInitRequest = {
+      jsonrpc: "2.0",
+      id: 0,
+      method: "initialize",
+      params: {
+        client: { name: "curl-client", version: "1.0.0" },
+        protocol: { name: "mcp", version: "2025-03-26" },
+      },
+    }
+
+    const reqHandlers1: Record<string, Array<(...args: any[]) => void>> = {
+      data: [],
+      end: [],
+      error: [],
+    }
+
+    const req1 = {
+      url: "/mcp",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // No session ID - this is an initialize request
+      },
+      on: vi.fn((event, handler) => {
+        if (reqHandlers1[event]) {
+          reqHandlers1[event].push(handler)
+        }
+        return req1
+      }),
+      emit: vi.fn((event, ...args) => {
+        if (reqHandlers1[event]) {
+          reqHandlers1[event].forEach((handler) => handler(...args))
+        }
+        return true
+      }),
+      destroy: vi.fn(),
+    }
+
+    const res1 = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      write: vi.fn(),
+      setHeader: vi.fn(),
+    }
+
+    // Simulate the POST request with invalid format
+    transportAny.handlePostRequest(req1, res1)
+    req1.emit("data", Buffer.from(JSON.stringify(invalidInitRequest)))
+    req1.emit("end")
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Should return 400 Bad Request for invalid format
+    expect(res1.writeHead).toHaveBeenCalledWith(400)
+    expect(res1.end).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid session. A valid Mcp-Session-Id header is required."),
+    )
+
+    // Test 2: Valid format (the correct MCP format)
+    const validInitRequest = {
+      jsonrpc: "2.0",
+      id: 0,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "curl-client", version: "1.0.0" },
+      },
+    }
+
+    // Set up a mock response handler for the valid request
+    transport.onmessage = vi.fn((message) => {
+      if ("method" in message && message.method === "initialize" && "id" in message) {
+        const response: JSONRPCMessage = {
+          jsonrpc: "2.0" as const,
+          id: message.id,
+          result: {
+            protocolVersion: "2025-03-26",
+            serverInfo: { name: "test-server", version: "1.0.0" },
+            capabilities: { tools: {} },
+          },
+        }
+        setTimeout(() => transport.send(response), 0)
+      }
+    })
+
+    const reqHandlers2: Record<string, Array<(...args: any[]) => void>> = {
+      data: [],
+      end: [],
+      error: [],
+    }
+
+    const req2 = {
+      url: "/mcp",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // No session ID - this is an initialize request
+      },
+      on: vi.fn((event, handler) => {
+        if (reqHandlers2[event]) {
+          reqHandlers2[event].push(handler)
+        }
+        return req2
+      }),
+      emit: vi.fn((event, ...args) => {
+        if (reqHandlers2[event]) {
+          reqHandlers2[event].forEach((handler) => handler(...args))
+        }
+        return true
+      }),
+      destroy: vi.fn(),
+    }
+
+    const res2 = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      write: vi.fn(),
+      setHeader: vi.fn(),
+    }
+
+    // Simulate the POST request with valid format
+    transportAny.handlePostRequest(req2, res2)
+    req2.emit("data", Buffer.from(JSON.stringify(validInitRequest)))
+    req2.emit("end")
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Should return 200 OK with session ID for valid format
+    expect(res2.writeHead).toHaveBeenCalledWith(200)
+    expect(res2.setHeader).toHaveBeenCalledWith("Mcp-Session-Id", expect.any(String))
+    expect(res2.end).toHaveBeenCalled()
+
+    // Verify the response contains proper initialize result
+    const responseBody = res2.end.mock.calls[0]?.[0]
+    if (responseBody) {
+      const responseObj = JSON.parse(responseBody)
+      expect(responseObj.jsonrpc).toBe("2.0")
+      expect(responseObj.id).toBe(0)
+      expect(responseObj.result).toBeDefined()
+      expect(responseObj.result.protocolVersion).toBe("2025-03-26")
+    }
+
+    // Verify a session was created
+    expect(transportAny.sessions.size).toBeGreaterThan(0)
+  })
+
+  it("should handle non-initialize requests without session ID correctly", async () => {
+    // This test ensures that non-initialize requests properly require session IDs
+
+    transport.onmessage = vi.fn()
+    const transportAny = transport as any
+
+    const regularRequest = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    }
+
+    const reqHandlers: Record<string, Array<(...args: any[]) => void>> = {
+      data: [],
+      end: [],
+      error: [],
+    }
+
+    const req = {
+      url: "/mcp",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // No session ID - this should fail for non-initialize requests
+      },
+      on: vi.fn((event, handler) => {
+        if (reqHandlers[event]) {
+          reqHandlers[event].push(handler)
+        }
+        return req
+      }),
+      emit: vi.fn((event, ...args) => {
+        if (reqHandlers[event]) {
+          reqHandlers[event].forEach((handler) => handler(...args))
+        }
+        return true
+      }),
+      destroy: vi.fn(),
+    }
+
+    const res = {
+      writeHead: vi.fn(),
+      end: vi.fn(),
+      write: vi.fn(),
+      setHeader: vi.fn(),
+    }
+
+    // Simulate the POST request
+    transportAny.handlePostRequest(req, res)
+    req.emit("data", Buffer.from(JSON.stringify(regularRequest)))
+    req.emit("end")
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Should return 400 Bad Request for missing session ID
+    expect(res.writeHead).toHaveBeenCalledWith(400)
+    expect(res.end).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid session. A valid Mcp-Session-Id header is required."),
+    )
   })
 })
 

@@ -84,13 +84,11 @@ INIT_DATA='{
   "id": 1,
   "method": "initialize",
   "params": {
-    "client": {
+    "protocolVersion": "2025-03-26",
+    "capabilities": {},
+    "clientInfo": {
       "name": "test-client",
       "version": "1.0.0"
-    },
-    "protocol": {
-      "name": "mcp",
-      "version": "2025-03-26"
     }
   }
 }'
