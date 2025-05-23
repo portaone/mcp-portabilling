@@ -65,7 +65,7 @@ npx @ivotoby/openapi-mcp-server \
 # Initialize a session (first request)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"client":{"name":"curl-client","version":"1.0.0"},"protocol":{"name":"mcp","version":"2025-03-26"}}}'
+  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl-client","version":"1.0.0"}}}'
 
 # The response includes a Mcp-Session-Id header that you must use for subsequent requests
 # and the InitializeResult directly in the POST response body.

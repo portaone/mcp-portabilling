@@ -67,8 +67,9 @@ describe("StreamableHttpServerTransport", () => {
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test", version: "1.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
@@ -546,12 +547,13 @@ describe("StreamableHttpServerTransport", () => {
 
     // Create init request data
     const initData = {
-      jsonrpc: "2.0",
+      jsonrpc: "2.0" as const,
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test-client", version: "1.0.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
@@ -634,12 +636,13 @@ describe("StreamableHttpServerTransport", () => {
 
     // Create init request
     const initData = {
-      jsonrpc: "2.0",
+      jsonrpc: "2.0" as const,
       id: 1,
       method: "initialize",
       params: {
-        client: { name: "test-client", version: "1.0.0" },
-        protocol: { name: "mcp", version: "2025-03-26" },
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0" },
       },
     }
 
