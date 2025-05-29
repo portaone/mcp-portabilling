@@ -1,2 +1,2 @@
 #!/usr/bin/env node
-import "../dist/bundle.js";
+import "../dist/cli.js"
