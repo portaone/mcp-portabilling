@@ -115,12 +115,12 @@ describe("OpenAPIServer", () => {
     const handler = vi.mocked(mockServer.setRequestHandler).mock.calls[1][1]
 
     vi.mocked(mockToolsManager.findTool).mockReturnValue({
-      toolId: "get-ping",
+      toolId: "get::ping",
       tool: { name: "ping" },
     })
     vi.mocked(mockApiClient.executeApiCall).mockResolvedValue({ ok: true })
 
-    const req = { params: { id: "get-ping", arguments: { foo: "bar" } } }
+    const req = { params: { id: "get::ping", arguments: { foo: "bar" } } }
     const result = await handler(req)
     expect(result.content[0].text).toContain("ok")
   })
@@ -139,12 +139,12 @@ describe("OpenAPIServer", () => {
     const handler = vi.mocked(mockServer.setRequestHandler).mock.calls[1][1]
 
     vi.mocked(mockToolsManager.findTool).mockReturnValue({
-      toolId: "get-ping",
+      toolId: "get::ping",
       tool: { name: "ping" },
     })
     vi.mocked(mockApiClient.executeApiCall).mockRejectedValue(new Error("fail"))
 
-    const req = { params: { id: "get-ping", arguments: {} } }
+    const req = { params: { id: "get::ping", arguments: {} } }
     const result = await handler(req)
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toContain("fail")
@@ -171,8 +171,8 @@ describe("OpenAPIServer", () => {
 
     // Mock the tools with their IDs
     const mockToolsWithIds = [
-      ["GET-users", { name: "list-users" }],
-      ["POST-users", { name: "create-user" }],
+      ["GET::users", { name: "list-users" }],
+      ["POST::users", { name: "create-user" }],
     ]
     vi.mocked(mockToolsManager.getToolsWithIds).mockReturnValue(mockToolsWithIds)
 
@@ -189,8 +189,8 @@ describe("OpenAPIServer", () => {
 
     // Verify that setTools is called with a map containing the correct tool IDs and tools
     const expectedToolsMap = new Map([
-      ["GET-users", { name: "list-users" }],
-      ["POST-users", { name: "create-user" }],
+      ["GET::users", { name: "list-users" }],
+      ["POST::users", { name: "create-user" }],
     ])
     expect(mockApiClient.setTools).toHaveBeenCalledWith(expectedToolsMap)
   })

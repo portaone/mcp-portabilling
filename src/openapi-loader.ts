@@ -278,8 +278,11 @@ export class OpenAPISpecLoader {
         }
 
         const op = operation as OpenAPIV3.OperationObject
-        const cleanPath = path.replace(/\{([^}]+)\}/g, "$1")
-        const toolId = `${method.toUpperCase()}::${encodeURIComponent(cleanPath)}`
+        const cleanPath = path
+          .replace(/^\//, "")
+          .replace(/\{([^}]+)\}/g, "$1")
+          .replace(/\//g, "-")
+        const toolId = `${method.toUpperCase()}::${cleanPath}`
 
         let nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)
@@ -292,6 +295,9 @@ export class OpenAPISpecLoader {
             properties: {},
           },
         }
+
+        // Store the original path for API client use
+        ;(tool as any)["x-original-path"] = path
 
         // Gather all required property names
         const requiredParams: string[] = []

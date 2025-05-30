@@ -195,8 +195,8 @@ export class ToolsManager {
    * Get the path and method from a tool ID
    */
   parseToolId(toolId: string): { method: string; path: string } {
-    const [method, encodedPath] = toolId.split("::")
-    const path = encodedPath ? "/" + decodeURIComponent(encodedPath) : ""
+    const [method, pathPart] = toolId.split("::")
+    const path = pathPart ? "/" + pathPart : ""
     return { method, path }
   }
 }
