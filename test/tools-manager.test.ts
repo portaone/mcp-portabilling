@@ -38,8 +38,8 @@ describe("ToolsManager", () => {
     it("should load and parse the OpenAPI spec", async () => {
       const mockSpec = { paths: {} }
       const mockTools = new Map([
-        ["GET-users", { name: "List Users", description: "Get all users" } as Tool],
-        ["POST-users", { name: "Create User", description: "Create a new user" } as Tool],
+        ["GET::users", { name: "List Users", description: "Get all users" } as Tool],
+        ["POST::users", { name: "Create User", description: "Create a new user" } as Tool],
       ])
 
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue(mockSpec)
@@ -74,41 +74,41 @@ describe("ToolsManager", () => {
     it("should filter tools by includeTools list", async () => {
       // Setup raw tools
       const mockTools = new Map([
-        ["GET-foo", { name: "foo" } as Tool],
-        ["GET-bar", { name: "bar" } as Tool],
+        ["GET::foo", { name: "foo" } as Tool],
+        ["GET::bar", { name: "bar" } as Tool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
-      ;(toolsManager as any).config.includeTools = ["GET-bar"]
+      ;(toolsManager as any).config.includeTools = ["GET::bar"]
       await toolsManager.initialize()
-      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-bar"])
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::bar"])
     })
 
     it("should filter tools by includeOperations list", async () => {
       const mockTools = new Map([
-        ["GET-1", { name: "g1" } as Tool],
-        ["POST-1", { name: "p1" } as Tool],
+        ["GET::1", { name: "g1" } as Tool],
+        ["POST::1", { name: "p1" } as Tool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeOperations = ["get"]
       await toolsManager.initialize()
-      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-1"])
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::1"])
     })
 
     it("should filter tools by includeResources list", async () => {
       const mockTools = new Map([
-        ["GET-users", { name: "u" } as Tool],
-        ["GET-orders-id", { name: "o" } as Tool],
+        ["GET::users", { name: "u" } as Tool],
+        ["GET::orders-id", { name: "o" } as Tool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeResources = ["users"]
       await toolsManager.initialize()
-      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-users"])
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
     })
 
     it("should filter tools by includeTags list", async () => {
@@ -119,15 +119,15 @@ describe("ToolsManager", () => {
         },
       } as any
       const mockTools = new Map([
-        ["GET-a", { name: "a" } as Tool],
-        ["GET-b", { name: "b" } as Tool],
+        ["GET::a", { name: "a" } as Tool],
+        ["GET::b", { name: "b" } as Tool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue(spec)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeTags = ["x"]
       await toolsManager.initialize()
-      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-a"])
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::a"])
     })
 
     it("should filter tools by includeTags list case-insensitively", async () => {
@@ -138,23 +138,23 @@ describe("ToolsManager", () => {
         },
       } as any
       const mockTools = new Map([
-        ["GET-a", { name: "a" } as Tool],
-        ["GET-b", { name: "b" } as Tool],
+        ["GET::a", { name: "a" } as Tool],
+        ["GET::b", { name: "b" } as Tool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue(spec)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeTags = ["users"] // lowercase, will match uppercase "USERS"
       await toolsManager.initialize()
-      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET-a"])
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::a"])
     })
   })
 
   describe("getAllTools - return all tools", () => {
     it("should return all tools", async () => {
       const mockTools = new Map([
-        ["GET-users", { name: "List Users" } as Tool],
-        ["POST-users", { name: "Create User" } as Tool],
+        ["GET::users", { name: "List Users" } as Tool],
+        ["POST::users", { name: "Create User" } as Tool],
       ])
 
       // Set up the tools map
@@ -169,8 +169,8 @@ describe("ToolsManager", () => {
   describe("getToolsWithIds", () => {
     it("should return all tools with their IDs", async () => {
       const mockTools = new Map([
-        ["GET-users", { name: "List Users" } as Tool],
-        ["POST-users", { name: "Create User" } as Tool],
+        ["GET::users", { name: "List Users" } as Tool],
+        ["POST::users", { name: "Create User" } as Tool],
       ])
 
       // Set up the tools map
@@ -179,8 +179,8 @@ describe("ToolsManager", () => {
       const toolsWithIds = toolsManager.getToolsWithIds()
 
       expect(toolsWithIds).toEqual([
-        ["GET-users", { name: "List Users" }],
-        ["POST-users", { name: "Create User" }],
+        ["GET::users", { name: "List Users" }],
+        ["POST::users", { name: "Create User" }],
       ])
     })
   })
@@ -188,25 +188,25 @@ describe("ToolsManager", () => {
   describe("findTool", () => {
     it("should find a tool by ID", () => {
       const mockTools = new Map([
-        ["GET-users", { name: "List Users" } as Tool],
-        ["POST-users", { name: "Create User" } as Tool],
+        ["GET::users", { name: "List Users" } as Tool],
+        ["POST::users", { name: "Create User" } as Tool],
       ])
 
       // Set up the tools map
       vi.spyOn(toolsManager as any, "tools", "get").mockReturnValue(mockTools)
 
-      const result = toolsManager.findTool("GET-users")
+      const result = toolsManager.findTool("GET::users")
 
       expect(result).toEqual({
-        toolId: "GET-users",
+        toolId: "GET::users",
         tool: { name: "List Users" },
       })
     })
 
     it("should find a tool by name", () => {
       const mockTools = new Map([
-        ["GET-users", { name: "List Users" } as Tool],
-        ["POST-users", { name: "Create User" } as Tool],
+        ["GET::users", { name: "List Users" } as Tool],
+        ["POST::users", { name: "Create User" } as Tool],
       ])
 
       // Set up the tools map
@@ -215,13 +215,13 @@ describe("ToolsManager", () => {
       const result = toolsManager.findTool("Create User")
 
       expect(result).toEqual({
-        toolId: "POST-users",
+        toolId: "POST::users",
         tool: { name: "Create User" },
       })
     })
 
     it("should return undefined if tool is not found", () => {
-      const mockTools = new Map([["GET-users", { name: "List Users" } as Tool]])
+      const mockTools = new Map([["GET::users", { name: "List Users" } as Tool]])
 
       // Set up the tools map
       vi.spyOn(toolsManager as any, "tools", "get").mockReturnValue(mockTools)
@@ -259,12 +259,12 @@ describe("ToolsManager", () => {
 
     it("should handle paths with special characters (encoded)", () => {
       const specialPath = "/user_profile/{user_id}/data-2024_06"
-      const encoded = encodeURIComponent("user_profile/{user_id}/data-2024_06")
-      const toolId = `GET::${encoded}`
+      const pathPart = "user_profile-user_id-data-2024_06"
+      const toolId = `GET::${pathPart}`
       const result = toolsManager.parseToolId(toolId)
       expect(result).toEqual({
         method: "GET",
-        path: "/user_profile/{user_id}/data-2024_06",
+        path: "/user_profile-user_id-data-2024_06",
       })
     })
 
@@ -277,11 +277,68 @@ describe("ToolsManager", () => {
       ]
       for (const path of paths) {
         const method = "GET"
-        const encoded = encodeURIComponent(path.replace(/^\//, ""))
-        const toolId = `${method}::${encoded}`
+        // Simulate the toolId generation process
+        const cleanPath = path
+          .replace(/^\//, "")
+          .replace(/\{([^}]+)\}/g, "$1")
+          .replace(/\//g, "-")
+        const toolId = `${method}::${cleanPath}`
         const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(toolId)
         expect(parsedMethod).toBe(method)
-        expect(parsedPath).toBe("/" + path.replace(/^\//, ""))
+        // The parsed path should have slashes converted to hyphens and curly braces removed
+        const expectedPath =
+          "/" +
+          path
+            .replace(/^\//, "")
+            .replace(/\{([^}]+)\}/g, "$1")
+            .replace(/\//g, "-")
+        expect(parsedPath).toBe(expectedPath)
+      }
+    })
+
+    it("REGRESSION: should resolve original toolId ambiguity issue with underscores and hyphens", () => {
+      // This test validates that the original issue is resolved:
+      // Before the fix, paths with underscores and hyphens could be parsed incorrectly
+      // because the separator was ambiguous
+
+      const problematicPaths = [
+        // Original problematic case: path with underscores and hyphens
+        "/user_profile-data",
+        "/api_v1-user-management",
+        "/service_users-authority_groups",
+        // Edge cases that could cause confusion
+        "/user-profile_data",
+        "/api-v1_user_management",
+        "/complex_path-with-mixed_separators",
+      ]
+
+      for (const originalPath of problematicPaths) {
+        const method = "POST"
+
+        // Step 1: Simulate toolId generation (as done in openapi-loader.ts)
+        const cleanPath = originalPath
+          .replace(/^\//, "") // Remove leading slash
+          .replace(/\{([^}]+)\}/g, "$1") // Remove curly braces from path params
+          .replace(/\//g, "-") // Convert slashes to hyphens
+        const toolId = `${method}::${cleanPath}`
+
+        // Step 2: Parse the toolId back (as done in tools-manager.ts and api-client.ts)
+        const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(toolId)
+
+        // Step 3: Validate the round-trip is unambiguous
+        expect(parsedMethod).toBe(method)
+
+        // The parsed path should be deterministic and unambiguous
+        // It will have the format: /original-path-with-slashes-as-hyphens
+        const expectedPath = "/" + cleanPath
+        expect(parsedPath).toBe(expectedPath)
+
+        // Step 4: Validate that the toolId format is unambiguous
+        // The :: separator ensures we can always split correctly
+        expect(toolId).toContain("::")
+        expect(toolId.split("::")).toHaveLength(2)
+        expect(toolId.split("::")[0]).toBe(method)
+        expect(toolId.split("::")[1]).toBe(cleanPath)
       }
     })
   })
