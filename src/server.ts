@@ -5,6 +5,7 @@ import { OpenAPIMCPServerConfig } from "./config"
 import { ToolsManager } from "./tools-manager"
 import { ApiClient } from "./api-client"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
+import { StaticAuthProvider } from "./auth-provider.js"
 
 /**
  * MCP server implementation for OpenAPI specifications
@@ -27,7 +28,11 @@ export class OpenAPIServer {
       },
     )
     this.toolsManager = new ToolsManager(config)
-    this.apiClient = new ApiClient(config.apiBaseUrl, config.headers)
+
+    // Use AuthProvider if provided, otherwise fallback to static headers
+    const authProviderOrHeaders = config.authProvider || new StaticAuthProvider(config.headers)
+    this.apiClient = new ApiClient(config.apiBaseUrl, authProviderOrHeaders)
+
     this.initializeHandlers()
   }
 

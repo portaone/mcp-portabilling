@@ -1,5 +1,6 @@
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
+import { AuthProvider } from "./auth-provider.js"
 
 export interface OpenAPIMCPServerConfig {
   name: string
@@ -11,6 +12,8 @@ export interface OpenAPIMCPServerConfig {
   /** Inline spec content when using 'inline' method */
   inlineSpecContent?: string
   headers?: Record<string, string>
+  /** AuthProvider for dynamic authentication (takes precedence over headers) */
+  authProvider?: AuthProvider
   transportType: "stdio" | "http"
   httpPort?: number
   httpHost?: string

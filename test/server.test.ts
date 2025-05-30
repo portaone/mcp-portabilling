@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import type { OpenAPIMCPServerConfig } from "../src/config"
+import type { AuthProvider } from "../src/auth-provider"
 
 vi.mock("@modelcontextprotocol/sdk/server/index.js")
 vi.mock("@modelcontextprotocol/sdk/server/transport.js")
@@ -207,5 +208,60 @@ describe("OpenAPIServer", () => {
         },
       }),
     )
+  })
+
+  describe("AuthProvider Integration", () => {
+    it("should use AuthProvider when provided in config", () => {
+      const mockAuthProvider: AuthProvider = {
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+        handleAuthError: vi.fn().mockResolvedValue(false),
+      }
+
+      const configWithAuthProvider: OpenAPIMCPServerConfig = {
+        ...config,
+        authProvider: mockAuthProvider,
+      }
+
+      const serverWithAuthProvider = new OpenAPIServer(configWithAuthProvider)
+
+      // Verify ApiClient was constructed with the AuthProvider
+      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)
+    })
+
+    it("should use StaticAuthProvider with headers when no AuthProvider provided", () => {
+      const configWithHeaders: OpenAPIMCPServerConfig = {
+        ...config,
+        headers: { "X-API-Key": "test-key" },
+      }
+
+      const serverWithHeaders = new OpenAPIServer(configWithHeaders)
+
+      // Verify ApiClient was constructed with a StaticAuthProvider
+      expect(ApiClient).toHaveBeenCalledWith(
+        config.apiBaseUrl,
+        expect.objectContaining({
+          getAuthHeaders: expect.any(Function),
+          handleAuthError: expect.any(Function),
+        }),
+      )
+    })
+
+    it("should prefer AuthProvider over headers when both are provided", () => {
+      const mockAuthProvider: AuthProvider = {
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+        handleAuthError: vi.fn().mockResolvedValue(false),
+      }
+
+      const configWithBoth: OpenAPIMCPServerConfig = {
+        ...config,
+        headers: { "X-API-Key": "should-be-ignored" },
+        authProvider: mockAuthProvider,
+      }
+
+      const serverWithBoth = new OpenAPIServer(configWithBoth)
+
+      // Verify ApiClient was constructed with the AuthProvider, not the headers
+      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)
+    })
   })
 })
