@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
+import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
 
 /**
  * Client for making API calls to the backend service
@@ -7,20 +8,32 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js"
 export class ApiClient {
   private axiosInstance: AxiosInstance
   private toolsMap: Map<string, Tool> = new Map()
+  private authProvider: AuthProvider
 
   /**
    * Create a new API client
    *
    * @param baseUrl - Base URL for the API
-   * @param headers - Optional headers to include with every request
+   * @param authProviderOrHeaders - AuthProvider instance or static headers for backward compatibility
    */
-  constructor(
-    baseUrl: string,
-    private headers: Record<string, string> = {},
-  ) {
+  constructor(baseUrl: string, authProviderOrHeaders?: AuthProvider | Record<string, string>) {
     this.axiosInstance = axios.create({
       baseURL: baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
     })
+
+    // Handle backward compatibility
+    if (!authProviderOrHeaders) {
+      this.authProvider = new StaticAuthProvider()
+    } else if (
+      typeof authProviderOrHeaders === "object" &&
+      !("getAuthHeaders" in authProviderOrHeaders)
+    ) {
+      // It's a headers object (backward compatibility)
+      this.authProvider = new StaticAuthProvider(authProviderOrHeaders)
+    } else {
+      // It's an AuthProvider
+      this.authProvider = authProviderOrHeaders as AuthProvider
+    }
   }
 
   /**
@@ -50,6 +63,22 @@ export class ApiClient {
    * @returns The API response data
    */
   async executeApiCall(toolId: string, params: Record<string, any>): Promise<any> {
+    return this.executeApiCallWithRetry(toolId, params, false)
+  }
+
+  /**
+   * Execute an API call with optional retry on auth error
+   *
+   * @param toolId - The tool ID in format METHOD-path-parts
+   * @param params - Parameters for the API call
+   * @param isRetry - Whether this is a retry attempt
+   * @returns The API response data
+   */
+  private async executeApiCallWithRetry(
+    toolId: string,
+    params: Record<string, any>,
+    isRetry: boolean,
+  ): Promise<any> {
     try {
       // Parse method and path from the tool ID
       const { method, path } = this.parseToolId(toolId)
@@ -120,11 +149,14 @@ export class ApiClient {
         }
       }
 
+      // Get fresh authentication headers
+      const authHeaders = await this.authProvider.getAuthHeaders()
+
       // Prepare request configuration
       const config: any = {
         method: method.toLowerCase(),
         url: resolvedPath,
-        headers: this.headers,
+        headers: authHeaders,
       }
 
       // Handle parameters based on HTTP method
@@ -143,6 +175,21 @@ export class ApiClient {
       // Handle errors
       if (axios.isAxiosError(error)) {
         const axiosError = error as AxiosError
+
+        // Check if it's an authentication error and we haven't already retried
+        if (!isRetry && isAuthError(axiosError)) {
+          try {
+            const shouldRetry = await this.authProvider.handleAuthError(axiosError)
+            if (shouldRetry) {
+              // Retry the request once
+              return this.executeApiCallWithRetry(toolId, params, true)
+            }
+          } catch (authHandlerError) {
+            // If auth handler throws, use that error instead
+            throw authHandlerError
+          }
+        }
+
         throw new Error(
           `API request failed: ${axiosError.message}${
             axiosError.response
