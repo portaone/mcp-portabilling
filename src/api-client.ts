@@ -209,12 +209,12 @@ export class ApiClient {
   /**
    * Parse a tool ID into HTTP method and path
    *
-   * @param toolId - Tool ID in format METHOD-path-parts
+   * @param toolId - Tool ID in format METHOD::pathPart
    * @returns Object containing method and path
    */
   private parseToolId(toolId: string): { method: string; path: string } {
-    const [method, ...pathParts] = toolId.split("-")
-    const path = "/" + pathParts.join("/").replace(/-/g, "/")
+    const [method, pathPart] = toolId.split("::")
+    const path = pathPart ? "/" + pathPart.replace(/-/g, "/") : ""
     return { method, path }
   }
 
