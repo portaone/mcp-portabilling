@@ -2,6 +2,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { OpenAPISpecLoader } from "./openapi-loader"
 import { OpenAPIMCPServerConfig } from "./config"
 import { OpenAPIV3 } from "openapi-types"
+import { parseToolId as parseToolIdUtil } from "./tool-id-utils"
 
 /**
  * Manages the tools available in the MCP server
@@ -193,10 +194,11 @@ export class ToolsManager {
 
   /**
    * Get the path and method from a tool ID
+   *
+   * Note: This converts hyphens back to slashes to reconstruct the original API path.
+   * This is consistent with ApiClient.parseToolId() which needs the actual path for HTTP requests.
    */
   parseToolId(toolId: string): { method: string; path: string } {
-    const [method, pathPart] = toolId.split("::")
-    const path = pathPart ? "/" + pathPart : ""
-    return { method, path }
+    return parseToolIdUtil(toolId)
   }
 }

@@ -4,6 +4,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
 import crypto from "crypto"
 import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
+import { generateToolId } from "./tool-id-utils"
 
 /**
  * Spec input method type
@@ -278,11 +279,7 @@ export class OpenAPISpecLoader {
         }
 
         const op = operation as OpenAPIV3.OperationObject
-        const cleanPath = path
-          .replace(/^\//, "")
-          .replace(/\{([^}]+)\}/g, "$1")
-          .replace(/\//g, "-")
-        const toolId = `${method.toUpperCase()}::${cleanPath}`
+        const toolId = generateToolId(method, path)
 
         let nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)

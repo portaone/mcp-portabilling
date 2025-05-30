@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
+import { parseToolId as parseToolIdUtil } from "./tool-id-utils"
 
 /**
  * Client for making API calls to the backend service
@@ -213,9 +214,7 @@ export class ApiClient {
    * @returns Object containing method and path
    */
   private parseToolId(toolId: string): { method: string; path: string } {
-    const [method, pathPart] = toolId.split("::")
-    const path = pathPart ? "/" + pathPart.replace(/-/g, "/") : ""
-    return { method, path }
+    return parseToolIdUtil(toolId)
   }
 
   /**

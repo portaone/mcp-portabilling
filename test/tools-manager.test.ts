@@ -237,7 +237,7 @@ describe("ToolsManager", () => {
       const result = toolsManager.parseToolId("GET::users-active")
       expect(result).toEqual({
         method: "GET",
-        path: "/users-active",
+        path: "/users/active",
       })
     })
 
@@ -245,7 +245,7 @@ describe("ToolsManager", () => {
       const result = toolsManager.parseToolId("POST::api-v1-user-profile-update")
       expect(result).toEqual({
         method: "POST",
-        path: "/api-v1-user-profile-update",
+        path: "/api/v1/user/profile/update",
       })
     })
 
@@ -253,7 +253,7 @@ describe("ToolsManager", () => {
       const result = toolsManager.parseToolId("GET::user_profile-user_id")
       expect(result).toEqual({
         method: "GET",
-        path: "/user_profile-user_id",
+        path: "/user_profile/user_id",
       })
     })
 
@@ -264,7 +264,7 @@ describe("ToolsManager", () => {
       const result = toolsManager.parseToolId(toolId)
       expect(result).toEqual({
         method: "GET",
-        path: "/user_profile-user_id-data-2024_06",
+        path: "/user_profile/user_id/data/2024_06",
       })
     })
 
@@ -285,13 +285,8 @@ describe("ToolsManager", () => {
         const toolId = `${method}::${cleanPath}`
         const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(toolId)
         expect(parsedMethod).toBe(method)
-        // The parsed path should have slashes converted to hyphens and curly braces removed
-        const expectedPath =
-          "/" +
-          path
-            .replace(/^\//, "")
-            .replace(/\{([^}]+)\}/g, "$1")
-            .replace(/\//g, "-")
+        // The parsed path should reconstruct the original API path structure
+        const expectedPath = "/" + cleanPath.replace(/-/g, "/")
         expect(parsedPath).toBe(expectedPath)
       }
     })
@@ -328,9 +323,8 @@ describe("ToolsManager", () => {
         // Step 3: Validate the round-trip is unambiguous
         expect(parsedMethod).toBe(method)
 
-        // The parsed path should be deterministic and unambiguous
-        // It will have the format: /original-path-with-slashes-as-hyphens
-        const expectedPath = "/" + cleanPath
+        // The parsed path should reconstruct the original API path structure
+        const expectedPath = "/" + cleanPath.replace(/-/g, "/")
         expect(parsedPath).toBe(expectedPath)
 
         // Step 4: Validate that the toolId format is unambiguous
@@ -368,14 +362,14 @@ describe("ToolsManager", () => {
         expect(newFormatToolId.split("::")[0]).toBe(method)
         expect(newFormatToolId.split("::")[1]).toBe(cleanPath)
 
-        // Parsing is now deterministic
+        // Parsing is now deterministic and reconstructs the original API path
         const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(newFormatToolId)
         expect(parsedMethod).toBe(method)
-        expect(parsedPath).toBe("/" + cleanPath)
+        expect(parsedPath).toBe("/" + cleanPath.replace(/-/g, "/"))
 
         // The old format would have been: "GET-user_profile-data"
         // Which could be parsed as:
-        // - method="GET", path="/user_profile-data" (correct)
+        // - method="GET", path="/user_profile-data" (incorrect - doesn't reconstruct API path)
         // - method="GET-user", path="/profile-data" (incorrect)
         // - method="GET-user_profile", path="/data" (incorrect)
 
