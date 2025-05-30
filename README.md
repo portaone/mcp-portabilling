@@ -6,10 +6,185 @@ A Model Context Protocol (MCP) server that exposes OpenAPI endpoints as MCP reso
 
 ## Overview
 
-This MCP server supports two transport methods:
+This MCP server can be used in two ways:
+
+1. **CLI Tool**: Use `npx @ivotoby/openapi-mcp-server` directly with command-line arguments for quick setup
+2. **Library**: Import and use the `OpenAPIServer` class in your own Node.js applications for custom implementations
+
+The server supports two transport methods:
 
 1. **Stdio Transport** (default): For direct integration with AI systems like Claude Desktop that manage MCP connections through standard input/output.
 2. **Streamable HTTP Transport**: For connecting to the server over HTTP, allowing web clients and other HTTP-capable systems to use the MCP protocol.
+
+## 🚀 Using as a Library
+
+Create dedicated MCP servers for specific APIs by importing and configuring the `OpenAPIServer` class. This approach is ideal for:
+
+- **Custom Authentication**: Implement complex authentication patterns with the `AuthProvider` interface
+- **API-Specific Optimizations**: Filter endpoints, customize error handling, and optimize for specific use cases
+- **Distribution**: Package your server as a standalone npm module for easy sharing
+- **Integration**: Embed the server in larger applications or add custom middleware
+
+### Basic Library Usage
+
+```typescript
+import { OpenAPIServer } from "@ivotoby/openapi-mcp-server"
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+
+const config = {
+  name: "my-api-server",
+  version: "1.0.0",
+  apiBaseUrl: "https://api.example.com",
+  openApiSpec: "https://api.example.com/openapi.json",
+  specInputMethod: "url" as const,
+  headers: {
+    Authorization: "Bearer your-token",
+    "X-API-Key": "your-api-key",
+  },
+  transportType: "stdio" as const,
+  toolsMode: "all" as const,
+}
+
+const server = new OpenAPIServer(config)
+const transport = new StdioServerTransport()
+await server.start(transport)
+```
+
+### Advanced Authentication with AuthProvider
+
+For APIs with token expiration, refresh requirements, or complex authentication:
+
+```typescript
+import { OpenAPIServer, AuthProvider } from "@ivotoby/openapi-mcp-server"
+import { AxiosError } from "axios"
+
+class MyAuthProvider implements AuthProvider {
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    // Called before each request - return fresh headers
+    if (this.isTokenExpired()) {
+      await this.refreshToken()
+    }
+    return { Authorization: `Bearer ${this.token}` }
+  }
+
+  async handleAuthError(error: AxiosError): Promise<boolean> {
+    // Called on 401/403 errors - return true to retry
+    if (error.response?.status === 401) {
+      await this.refreshToken()
+      return true // Retry the request
+    }
+    return false
+  }
+}
+
+const authProvider = new MyAuthProvider()
+const config = {
+  // ... other config
+  authProvider: authProvider, // Use AuthProvider instead of static headers
+}
+```
+
+**📁 See the [examples/](./examples/) directory for complete, runnable examples including:**
+
+- Basic library usage with static authentication
+- AuthProvider implementations for different scenarios
+- Real-world Beatport API integration
+- Production-ready packaging patterns
+
+## 🔐 Dynamic Authentication with AuthProvider
+
+The `AuthProvider` interface enables sophisticated authentication scenarios that static headers cannot handle:
+
+### Key Features
+
+- **Dynamic Headers**: Fresh authentication headers for each request
+- **Token Expiration Handling**: Automatic detection and handling of expired tokens
+- **Authentication Error Recovery**: Retry logic for recoverable authentication failures
+- **Custom Error Messages**: Provide clear, actionable guidance to users
+
+### AuthProvider Interface
+
+```typescript
+interface AuthProvider {
+  /**
+   * Get authentication headers for the current request
+   * Called before each API request to get fresh headers
+   */
+  getAuthHeaders(): Promise<Record<string, string>>
+
+  /**
+   * Handle authentication errors from API responses
+   * Called when the API returns 401 or 403 errors
+   * Return true to retry the request, false otherwise
+   */
+  handleAuthError(error: AxiosError): Promise<boolean>
+}
+```
+
+### Common Patterns
+
+#### Automatic Token Refresh
+
+```typescript
+class RefreshableAuthProvider implements AuthProvider {
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    if (this.isTokenExpired()) {
+      await this.refreshToken()
+    }
+    return { Authorization: `Bearer ${this.accessToken}` }
+  }
+
+  async handleAuthError(error: AxiosError): Promise<boolean> {
+    if (error.response?.status === 401) {
+      await this.refreshToken()
+      return true // Retry with fresh token
+    }
+    return false
+  }
+}
+```
+
+#### Manual Token Management (e.g., Beatport)
+
+```typescript
+class ManualTokenAuthProvider implements AuthProvider {
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    if (!this.token || this.isTokenExpired()) {
+      throw new Error(
+        "Token expired. Please get a new token from your browser:\n" +
+          "1. Go to the API website and log in\n" +
+          "2. Open browser dev tools (F12)\n" +
+          "3. Copy the Authorization header from any API request\n" +
+          "4. Update your token using updateToken()",
+      )
+    }
+    return { Authorization: `Bearer ${this.token}` }
+  }
+
+  updateToken(token: string): void {
+    this.token = token
+    this.tokenExpiry = new Date(Date.now() + 3600000) // 1 hour
+  }
+}
+```
+
+#### API Key Authentication
+
+```typescript
+class ApiKeyAuthProvider implements AuthProvider {
+  constructor(private apiKey: string) {}
+
+  async getAuthHeaders(): Promise<Record<string, string>> {
+    return { "X-API-Key": this.apiKey }
+  }
+
+  async handleAuthError(error: AxiosError): Promise<boolean> {
+    throw new Error("API key authentication failed. Please check your key.")
+  }
+}
+```
+
+**📖 For detailed AuthProvider documentation and examples, see [docs/auth-provider-guide.md](./docs/auth-provider-guide.md)**
 
 ## Quick Start for Users
 
@@ -353,6 +528,18 @@ To see debug logs:
 **Q: What is a "tool"?**
 A: A tool corresponds to a single API endpoint derived from your OpenAPI specification, exposed as an MCP resource.
 
+**Q: How can I use this package in my own project?**
+A: You can import the `OpenAPIServer` class and use it as a library in your Node.js application. This allows you to create dedicated MCP servers for specific APIs with custom authentication, filtering, and error handling. See the [examples/](./examples/) directory for complete implementations.
+
+**Q: What's the difference between using the CLI and using it as a library?**
+A: The CLI is great for quick setup and testing, while the library approach allows you to create dedicated packages for specific APIs, implement custom authentication with `AuthProvider`, add custom logic, and distribute your server as a standalone npm module.
+
+**Q: How do I handle APIs with expiring tokens?**
+A: Use the `AuthProvider` interface instead of static headers. AuthProvider allows you to implement dynamic authentication with token refresh, expiration handling, and custom error recovery. See the AuthProvider examples for different patterns.
+
+**Q: What is AuthProvider and when should I use it?**
+A: `AuthProvider` is an interface for dynamic authentication that gets fresh headers before each request and handles authentication errors. Use it when your API has expiring tokens, requires token refresh, or needs complex authentication logic that static headers can't handle.
+
 **Q: How do I filter which tools are loaded?**
 A: Use the `--tool`, `--tag`, `--resource`, and `--operation` flags, or set `TOOLS_MODE=dynamic` for meta-tools only.
 
@@ -360,7 +547,7 @@ A: Use the `--tool`, `--tag`, `--resource`, and `--operation` flags, or set `TOO
 A: Dynamic mode provides meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`) to inspect and interact with endpoints without preloading all operations, which is useful for large or changing APIs.
 
 **Q: How do I specify custom headers for API requests?**
-A: Use the `--headers` flag or `API_HEADERS` environment variable with `key:value` pairs separated by commas.
+A: Use the `--headers` flag or `API_HEADERS` environment variable with `key:value` pairs separated by commas for CLI usage. For library usage, use the `headers` config option or implement an `AuthProvider` for dynamic headers.
 
 **Q: Which transport methods are supported?**
 A: The server supports stdio transport (default) for integration with AI systems and HTTP transport (with streaming via SSE) for web clients.
@@ -370,6 +557,9 @@ A: The server fully resolves `$ref` references in parameters and schemas, preser
 
 **Q: What happens when parameter names conflict with request body properties?**
 A: The server detects naming conflicts and automatically prefixes body property names with `body_` to avoid collisions, ensuring all properties are accessible.
+
+**Q: Can I package my MCP server for distribution?**
+A: Yes! When using the library approach, you can create a dedicated npm package for your API. See the Beatport example for a complete implementation that can be packaged and distributed as `npx your-api-mcp-server`.
 
 **Q: Where can I find development and contribution guidelines?**
 A: See the "For Developers" section above for commands (`npm run build`, `npm run dev`, etc) and pull request workflow.
