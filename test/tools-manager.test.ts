@@ -234,21 +234,55 @@ describe("ToolsManager", () => {
 
   describe("parseToolId", () => {
     it("should parse a tool ID into method and path", () => {
-      const result = toolsManager.parseToolId("GET-users-active")
-
+      const result = toolsManager.parseToolId("GET::users-active")
       expect(result).toEqual({
         method: "GET",
-        path: "/users/active",
+        path: "/users-active",
       })
     })
 
     it("should handle complex paths with hyphens", () => {
-      const result = toolsManager.parseToolId("POST-api-v1-user-profile-update")
-
+      const result = toolsManager.parseToolId("POST::api-v1-user-profile-update")
       expect(result).toEqual({
         method: "POST",
-        path: "/api/v1/user/profile/update",
+        path: "/api-v1-user-profile-update",
       })
+    })
+
+    it("should handle paths with underscores", () => {
+      const result = toolsManager.parseToolId("GET::user_profile-user_id")
+      expect(result).toEqual({
+        method: "GET",
+        path: "/user_profile-user_id",
+      })
+    })
+
+    it("should handle paths with special characters (encoded)", () => {
+      const specialPath = "/user_profile/{user_id}/data-2024_06"
+      const encoded = encodeURIComponent("user_profile/{user_id}/data-2024_06")
+      const toolId = `GET::${encoded}`
+      const result = toolsManager.parseToolId(toolId)
+      expect(result).toEqual({
+        method: "GET",
+        path: "/user_profile/{user_id}/data-2024_06",
+      })
+    })
+
+    it("should round-trip encode and decode toolId for any path", () => {
+      const paths = [
+        "/user_profile/{user_id}",
+        "/api/v1/user-profile_update",
+        "/foo-bar_baz/123",
+        "/complex/path_with-mixed_chars/and123",
+      ]
+      for (const path of paths) {
+        const method = "GET"
+        const encoded = encodeURIComponent(path.replace(/^\//, ""))
+        const toolId = `${method}::${encoded}`
+        const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(toolId)
+        expect(parsedMethod).toBe(method)
+        expect(parsedPath).toBe("/" + path.replace(/^\//, ""))
+      }
     })
   })
 })
