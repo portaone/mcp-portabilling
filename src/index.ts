@@ -49,6 +49,7 @@ export * from "./api-client"
 export * from "./config"
 export * from "./tools-manager"
 export * from "./openapi-loader"
+export * from "./auth-provider"
 export * from "./transport/StreamableHttpServerTransport"
 
 // Export the main function for programmatic usage

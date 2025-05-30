@@ -1,0 +1,31 @@
+{
+  "name": "beatport-mcp-server",
+  "version": "1.0.0",
+  "description": "Beatport API MCP server using mcp-openapi-server",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "beatport-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ivotoby/openapi-mcp-server": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "keywords": [
+    "beatport",
+    "mcp",
+    "music",
+    "api",
+    "claude"
+  ]
+}

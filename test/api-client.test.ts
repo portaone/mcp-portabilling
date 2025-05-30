@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
-import axios from "axios"
+import axios, { AxiosError } from "axios"
 import { ApiClient } from "../src/api-client"
+import { AuthProvider, StaticAuthProvider } from "../src/auth-provider"
 
 // Mock axios
 vi.mock("axios")
@@ -98,6 +99,21 @@ describe("ApiClient", () => {
       vi.mocked(axios.isAxiosError).mockReturnValueOnce(false)
 
       await expect(apiClient.executeApiCall("GET-users-list", {})).rejects.toThrow("Network error")
+    })
+
+    it("should handle 500 errors properly", async () => {
+      const axiosError = new Error("Network error") as any
+      axiosError.response = {
+        status: 500,
+        data: { error: "Internal Server Error" },
+      }
+
+      mockAxiosInstance.mockRejectedValueOnce(axiosError)
+      vi.mocked(axios.isAxiosError).mockReturnValueOnce(true)
+
+      await expect(apiClient.executeApiCall("GET-users-list", {})).rejects.toThrow(
+        'API request failed: Network error (500: {"error":"Internal Server Error"})',
+      )
     })
 
     it("should replace path parameters in URL correctly and remove them from query parameters", async () => {
@@ -361,6 +377,212 @@ describe("ApiClient", () => {
         expect.objectContaining({
           method: "post",
           url: "/api/v1/user/profile",
+        }),
+      )
+    })
+  })
+
+  describe("AuthProvider Integration", () => {
+    let mockAuthProvider: AuthProvider
+    let authApiClient: ApiClient
+
+    beforeEach(() => {
+      // Don't clear all mocks here - it breaks axios.isAxiosError
+
+      // Setup mock axios instance
+      mockAxiosInstance = vi.fn().mockResolvedValue({ data: { result: "success" } })
+      vi.mocked(axios.create).mockReturnValue(mockAxiosInstance as any)
+
+      // Create mock AuthProvider
+      mockAuthProvider = {
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token123" }),
+        handleAuthError: vi.fn().mockResolvedValue(false),
+      }
+
+      // Create ApiClient with AuthProvider
+      authApiClient = new ApiClient("https://api.example.com", mockAuthProvider)
+    })
+
+    it("should call getAuthHeaders before each request", async () => {
+      await authApiClient.executeApiCall("GET-users-list", {})
+
+      expect(mockAuthProvider.getAuthHeaders).toHaveBeenCalledTimes(1)
+      expect(mockAxiosInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: { Authorization: "Bearer token123" },
+        }),
+      )
+    })
+
+    it("should handle authentication errors and call handleAuthError", async () => {
+      const authError = new Error("Unauthorized") as AxiosError
+      authError.response = { status: 401, data: { error: "Unauthorized" } } as any
+
+      mockAxiosInstance.mockRejectedValueOnce(authError)
+      vi.mocked(axios.isAxiosError).mockReturnValue(true)
+
+      await expect(authApiClient.executeApiCall("GET-users-list", {})).rejects.toThrow(
+        'API request failed: Unauthorized (401: {"error":"Unauthorized"})',
+      )
+
+      expect(mockAuthProvider.handleAuthError).toHaveBeenCalledWith(authError)
+    })
+
+    it("should retry request when handleAuthError returns true", async () => {
+      const authError = new Error("Unauthorized") as AxiosError
+      authError.response = { status: 401, data: { error: "Unauthorized" } } as any
+
+      // First call fails with auth error, second succeeds
+      mockAxiosInstance
+        .mockRejectedValueOnce(authError)
+        .mockResolvedValueOnce({ data: { result: "success after retry" } })
+
+      vi.mocked(axios.isAxiosError).mockReturnValue(true)
+
+      // Mock auth provider to return true for retry
+      vi.mocked(mockAuthProvider.handleAuthError).mockResolvedValueOnce(true)
+
+      // Mock fresh headers for retry
+      vi.mocked(mockAuthProvider.getAuthHeaders)
+        .mockResolvedValueOnce({ Authorization: "Bearer token123" }) // First call
+        .mockResolvedValueOnce({ Authorization: "Bearer fresh-token" }) // Retry call
+
+      const result = await authApiClient.executeApiCall("GET-users-list", {})
+
+      expect(result).toEqual({ result: "success after retry" })
+      expect(mockAuthProvider.handleAuthError).toHaveBeenCalledWith(authError)
+      expect(mockAuthProvider.getAuthHeaders).toHaveBeenCalledTimes(2)
+      expect(mockAxiosInstance).toHaveBeenCalledTimes(2)
+
+      // Verify retry call used fresh headers
+      expect(mockAxiosInstance).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          headers: { Authorization: "Bearer fresh-token" },
+        }),
+      )
+    })
+
+    it("should not retry on non-auth errors", async () => {
+      const networkError = new Error("Network error") as AxiosError
+      networkError.response = { status: 500, data: { error: "Internal Server Error" } } as any
+
+      mockAxiosInstance.mockRejectedValueOnce(networkError)
+      vi.mocked(axios.isAxiosError).mockReturnValue(true)
+
+      await expect(authApiClient.executeApiCall("GET-users-list", {})).rejects.toThrow(
+        'API request failed: Network error (500: {"error":"Internal Server Error"})',
+      )
+
+      // Should not call handleAuthError for non-auth errors
+      expect(mockAuthProvider.handleAuthError).not.toHaveBeenCalled()
+      expect(mockAxiosInstance).toHaveBeenCalledTimes(1)
+    })
+
+    it("should not retry more than once", async () => {
+      const authError = new Error("Unauthorized") as AxiosError
+      authError.response = { status: 401, data: { error: "Unauthorized" } } as any
+
+      // Both calls fail with auth error
+      mockAxiosInstance.mockRejectedValueOnce(authError).mockRejectedValueOnce(authError)
+
+      vi.mocked(axios.isAxiosError).mockReturnValue(true)
+
+      // Mock auth provider to return true for retry
+      vi.mocked(mockAuthProvider.handleAuthError).mockResolvedValueOnce(true)
+
+      await expect(authApiClient.executeApiCall("GET-users-list", {})).rejects.toThrow(
+        'API request failed: Unauthorized (401: {"error":"Unauthorized"})',
+      )
+
+      // Should be called twice: original + retry
+      expect(mockAxiosInstance).toHaveBeenCalledTimes(2)
+      // But handleAuthError should only be called once (on the original failure)
+      expect(mockAuthProvider.handleAuthError).toHaveBeenCalledTimes(1)
+    })
+
+    it("should throw auth handler error if auth handler throws", async () => {
+      const authError = new Error("Unauthorized") as AxiosError
+      authError.response = { status: 401, data: { error: "Unauthorized" } } as any
+
+      const authHandlerError = new Error("Token expired. Please provide a new token.")
+
+      mockAxiosInstance.mockRejectedValueOnce(authError)
+      vi.mocked(axios.isAxiosError).mockReturnValue(true)
+      vi.mocked(mockAuthProvider.handleAuthError).mockRejectedValueOnce(authHandlerError)
+
+      await expect(authApiClient.executeApiCall("GET-users-list", {})).rejects.toThrow(
+        "Token expired. Please provide a new token.",
+      )
+
+      expect(mockAuthProvider.handleAuthError).toHaveBeenCalledWith(authError)
+    })
+
+    it("should get fresh headers for each request", async () => {
+      // Make multiple requests
+      await authApiClient.executeApiCall("GET-users-list", {})
+      await authApiClient.executeApiCall("GET-posts-list", {})
+
+      expect(mockAuthProvider.getAuthHeaders).toHaveBeenCalledTimes(2)
+      expect(mockAxiosInstance).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe("Backward Compatibility", () => {
+    it("should work with static headers (backward compatibility)", async () => {
+      const clientWithHeaders = new ApiClient("https://api.example.com", {
+        "X-API-Key": "test-key",
+      })
+
+      await clientWithHeaders.executeApiCall("GET-users-list", {})
+
+      expect(mockAxiosInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: { "X-API-Key": "test-key" },
+        }),
+      )
+    })
+
+    it("should work with no auth provider or headers", async () => {
+      const clientWithoutAuth = new ApiClient("https://api.example.com")
+
+      await clientWithoutAuth.executeApiCall("GET-users-list", {})
+
+      expect(mockAxiosInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: {},
+        }),
+      )
+    })
+
+    it("should distinguish between AuthProvider and headers object", async () => {
+      // Test with headers object (should use StaticAuthProvider internally)
+      const clientWithHeaders = new ApiClient("https://api.example.com", { "X-API-Key": "test" })
+
+      // Test with actual AuthProvider
+      const authProvider: AuthProvider = {
+        getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: "Bearer token" }),
+        handleAuthError: vi.fn().mockResolvedValue(false),
+      }
+      const clientWithAuthProvider = new ApiClient("https://api.example.com", authProvider)
+
+      await clientWithHeaders.executeApiCall("GET-test", {})
+      await clientWithAuthProvider.executeApiCall("GET-test", {})
+
+      // Headers client should use static headers
+      expect(mockAxiosInstance).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          headers: { "X-API-Key": "test" },
+        }),
+      )
+
+      // AuthProvider client should call getAuthHeaders
+      expect(authProvider.getAuthHeaders).toHaveBeenCalled()
+      expect(mockAxiosInstance).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          headers: { Authorization: "Bearer token" },
         }),
       )
     })
