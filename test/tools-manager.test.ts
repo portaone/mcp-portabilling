@@ -341,5 +341,46 @@ describe("ToolsManager", () => {
         expect(toolId.split("::")[1]).toBe(cleanPath)
       }
     })
+
+    it("REGRESSION: demonstrates that old format would have been ambiguous", () => {
+      // This test demonstrates why the old format was problematic
+      // and validates that the new format resolves the ambiguity
+
+      const problematicPaths = [
+        "/user_profile-data", // Could be confused with "/user/profile-data"
+        "/api-v1_user", // Could be confused with "/api-v1/user"
+        "/service_users-groups", // Could be confused with "/service/users-groups"
+      ]
+
+      for (const path of problematicPaths) {
+        // With the OLD format (using single hyphen separator):
+        // The toolId would be: "GET-user_profile-data"
+        // When parsing, it's ambiguous where the method ends and path begins
+        // because both method separator and path parts use hyphens
+
+        // With the NEW format (using :: separator):
+        const method = "GET"
+        const cleanPath = path.replace(/^\//, "").replace(/\//g, "-")
+        const newFormatToolId = `${method}::${cleanPath}`
+
+        // The new format is unambiguous because :: only appears once as separator
+        expect(newFormatToolId.split("::")).toHaveLength(2)
+        expect(newFormatToolId.split("::")[0]).toBe(method)
+        expect(newFormatToolId.split("::")[1]).toBe(cleanPath)
+
+        // Parsing is now deterministic
+        const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(newFormatToolId)
+        expect(parsedMethod).toBe(method)
+        expect(parsedPath).toBe("/" + cleanPath)
+
+        // The old format would have been: "GET-user_profile-data"
+        // Which could be parsed as:
+        // - method="GET", path="/user_profile-data" (correct)
+        // - method="GET-user", path="/profile-data" (incorrect)
+        // - method="GET-user_profile", path="/data" (incorrect)
+
+        // The new format eliminates this ambiguity completely
+      }
+    })
   })
 })
