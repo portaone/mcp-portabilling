@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { ToolsManager } from "../src/tools-manager"
-import { OpenAPISpecLoader } from "../src/openapi-loader"
+import { OpenAPISpecLoader, ExtendedTool } from "../src/openapi-loader"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
 // Mock dependencies
@@ -87,8 +87,8 @@ describe("ToolsManager", () => {
 
     it("should filter tools by includeOperations list", async () => {
       const mockTools = new Map([
-        ["GET::1", { name: "g1" } as Tool],
-        ["POST::1", { name: "p1" } as Tool],
+        ["GET::1", { name: "g1", httpMethod: "GET" } as ExtendedTool],
+        ["POST::1", { name: "p1", httpMethod: "POST" } as ExtendedTool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
@@ -100,8 +100,8 @@ describe("ToolsManager", () => {
 
     it("should filter tools by includeResources list", async () => {
       const mockTools = new Map([
-        ["GET::users", { name: "u" } as Tool],
-        ["GET::orders-id", { name: "o" } as Tool],
+        ["GET::users", { name: "u", resourceName: "users" } as ExtendedTool],
+        ["GET::orders-id", { name: "o", resourceName: "orders" } as ExtendedTool],
       ])
       mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
@@ -112,17 +112,11 @@ describe("ToolsManager", () => {
     })
 
     it("should filter tools by includeTags list", async () => {
-      const spec = {
-        paths: {
-          "/a": { get: { tags: ["x"] } },
-          "/b": { get: { tags: ["y"] } },
-        },
-      } as any
       const mockTools = new Map([
-        ["GET::a", { name: "a" } as Tool],
-        ["GET::b", { name: "b" } as Tool],
+        ["GET::a", { name: "a", tags: ["x"] } as ExtendedTool],
+        ["GET::b", { name: "b", tags: ["y"] } as ExtendedTool],
       ])
-      mockSpecLoader.loadOpenAPISpec.mockResolvedValue(spec)
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeTags = ["x"]
@@ -131,22 +125,111 @@ describe("ToolsManager", () => {
     })
 
     it("should filter tools by includeTags list case-insensitively", async () => {
-      const spec = {
-        paths: {
-          "/a": { get: { tags: ["USERS"] } },
-          "/b": { get: { tags: ["products"] } },
-        },
-      } as any
       const mockTools = new Map([
-        ["GET::a", { name: "a" } as Tool],
-        ["GET::b", { name: "b" } as Tool],
+        ["GET::a", { name: "a", tags: ["USERS"] } as ExtendedTool],
+        ["GET::b", { name: "b", tags: ["products"] } as ExtendedTool],
       ])
-      mockSpecLoader.loadOpenAPISpec.mockResolvedValue(spec)
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
       mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
       ;(toolsManager as any).config.toolsMode = "all"
       ;(toolsManager as any).config.includeTags = ["users"] // lowercase, will match uppercase "USERS"
       await toolsManager.initialize()
       expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::a"])
+    })
+
+    it("should filter tools by multiple criteria simultaneously", async () => {
+      const mockTools = new Map([
+        [
+          "GET::users",
+          {
+            name: "getUsers",
+            httpMethod: "GET",
+            resourceName: "users",
+            tags: ["users", "public"],
+          } as ExtendedTool,
+        ],
+        [
+          "POST::users",
+          {
+            name: "createUser",
+            httpMethod: "POST",
+            resourceName: "users",
+            tags: ["users", "admin"],
+          } as ExtendedTool,
+        ],
+        [
+          "GET::orders",
+          {
+            name: "getOrders",
+            httpMethod: "GET",
+            resourceName: "orders",
+            tags: ["orders"],
+          } as ExtendedTool,
+        ],
+      ])
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+      mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+      ;(toolsManager as any).config.toolsMode = "all"
+      ;(toolsManager as any).config.includeOperations = ["get"]
+      ;(toolsManager as any).config.includeResources = ["users"]
+      ;(toolsManager as any).config.includeTags = ["public"]
+      await toolsManager.initialize()
+      // Should only include GET::users because it matches all criteria
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
+    })
+
+    it("should handle tools with missing metadata gracefully", async () => {
+      const mockTools = new Map([
+        [
+          "GET::users",
+          {
+            name: "getUsers",
+            httpMethod: "GET",
+            resourceName: "users",
+            tags: ["users"],
+          } as ExtendedTool,
+        ],
+        [
+          "POST::unknown",
+          {
+            name: "unknownTool",
+            // Missing httpMethod, resourceName, tags
+          } as ExtendedTool,
+        ],
+      ])
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+      mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+      ;(toolsManager as any).config.toolsMode = "all"
+      ;(toolsManager as any).config.includeOperations = ["get"]
+      await toolsManager.initialize()
+      // Should only include GET::users because POST::unknown has no httpMethod
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
+    })
+
+    it("should filter by resource names case-insensitively", async () => {
+      const mockTools = new Map([
+        [
+          "GET::users",
+          {
+            name: "getUsers",
+            resourceName: "Users", // uppercase
+          } as ExtendedTool,
+        ],
+        [
+          "GET::orders",
+          {
+            name: "getOrders",
+            resourceName: "orders", // lowercase
+          } as ExtendedTool,
+        ],
+      ])
+      mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+      mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+      ;(toolsManager as any).config.toolsMode = "all"
+      ;(toolsManager as any).config.includeResources = ["users"] // lowercase filter
+      await toolsManager.initialize()
+      // Should match "Users" resource case-insensitively
+      expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
     })
   })
 

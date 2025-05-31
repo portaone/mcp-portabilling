@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { readFile } from "fs/promises"
-import { OpenAPISpecLoader } from "../src/openapi-loader"
+import { OpenAPISpecLoader, ExtendedTool } from "../src/openapi-loader"
 import { OpenAPIV3 } from "openapi-types"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 
@@ -436,6 +436,272 @@ paths:
       const getUsersTool = tools.get("GET::users") as Tool
 
       expect(getUsersTool.name).toBe("get-usrs")
+    })
+
+    it("should fallback to summary when operationId is missing", () => {
+      const specWithoutOperationId: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: {
+              summary: "Get all users from the system",
+              description: "Returns a list of users",
+              responses: {},
+            },
+          },
+          "/orders": {
+            post: {
+              summary: "Create new order",
+              description: "Creates a new order in the system",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithoutOperationId)
+
+      const getUsersTool = tools.get("GET::users") as Tool
+      expect(getUsersTool).toBeDefined()
+      expect(getUsersTool.name).toBe("get-all-users-from-the-system")
+
+      const createOrderTool = tools.get("POST::orders") as Tool
+      expect(createOrderTool).toBeDefined()
+      expect(createOrderTool.name).toBe("create-new-order")
+    })
+
+    it("should fallback to method and path when both operationId and summary are missing", () => {
+      const specWithoutOperationIdOrSummary: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: {
+              description: "Returns a list of users",
+              responses: {},
+            },
+          },
+          "/users/{id}": {
+            delete: {
+              description: "Deletes a user by ID",
+              responses: {},
+            },
+          },
+          "/api/v1/products": {
+            post: {
+              description: "Creates a new product",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithoutOperationIdOrSummary)
+
+      const getUsersTool = tools.get("GET::users") as Tool
+      expect(getUsersTool).toBeDefined()
+      expect(getUsersTool.name).toBe("get-users")
+
+      const deleteUserTool = tools.get("DELETE::users-id") as Tool
+      expect(deleteUserTool).toBeDefined()
+      expect(deleteUserTool.name).toBe("delete-users-id")
+
+      const createProductTool = tools.get("POST::api-v1-products") as Tool
+      expect(createProductTool).toBeDefined()
+      expect(createProductTool.name).toBe("post-api-v-1-products")
+    })
+
+    it("should handle complex path structures in fallback names", () => {
+      const specWithComplexPaths: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/api/v2/user-management/profiles/{userId}/settings": {
+            put: {
+              description: "Updates user profile settings",
+              responses: {},
+            },
+          },
+          "/service/health-check": {
+            get: {
+              description: "Health check endpoint",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithComplexPaths)
+
+      const updateSettingsTool = tools.get(
+        "PUT::api-v2-user--management-profiles-userId-settings",
+      ) as Tool
+      expect(updateSettingsTool).toBeDefined()
+      expect(updateSettingsTool.name).toBe("put-api-v-2-user-management-profiles-user-id-settings")
+
+      const healthCheckTool = tools.get("GET::service-health--check") as Tool
+      expect(healthCheckTool).toBeDefined()
+      expect(healthCheckTool.name).toBe("get-service-health-check")
+    })
+
+    it("should handle mixed scenarios with some operations having operationId and others not", () => {
+      const specWithMixedOperations: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: {
+              operationId: "getAllUsers",
+              summary: "Get all users",
+              responses: {},
+            },
+            post: {
+              summary: "Create a new user",
+              description: "Creates a new user in the system",
+              responses: {},
+            },
+          },
+          "/orders/{id}": {
+            get: {
+              description: "Get order by ID",
+              responses: {},
+            },
+            put: {
+              operationId: "updateOrder",
+              summary: "Update existing order",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithMixedOperations)
+
+      // Has operationId
+      const getAllUsersTool = tools.get("GET::users") as Tool
+      expect(getAllUsersTool).toBeDefined()
+      expect(getAllUsersTool.name).toBe("get-all-usrs")
+
+      // Has summary but no operationId
+      const createUserTool = tools.get("POST::users") as Tool
+      expect(createUserTool).toBeDefined()
+      expect(createUserTool.name).toBe("create-a-new-user")
+
+      // Has neither operationId nor summary
+      const getOrderTool = tools.get("GET::orders-id") as Tool
+      expect(getOrderTool).toBeDefined()
+      expect(getOrderTool.name).toBe("get-orders-id")
+
+      // Has operationId
+      const updateOrderTool = tools.get("PUT::orders-id") as Tool
+      expect(updateOrderTool).toBeDefined()
+      expect(updateOrderTool.name).toBe("upd-order")
+    })
+
+    it("should handle empty summary gracefully", () => {
+      const specWithEmptySummary: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: {
+              summary: "",
+              description: "Returns a list of users",
+              responses: {},
+            },
+          },
+          "/products": {
+            post: {
+              summary: "   ",
+              description: "Creates a new product",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithEmptySummary)
+
+      const getUsersTool = tools.get("GET::users") as Tool
+      expect(getUsersTool).toBeDefined()
+      expect(getUsersTool.name).toBe("get-users")
+
+      const createProductTool = tools.get("POST::products") as Tool
+      expect(createProductTool).toBeDefined()
+      expect(createProductTool.name).toBe("unnamed-tool")
+    })
+
+    it("should handle very long fallback names with proper abbreviation", () => {
+      const specWithLongFallbackNames: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/api/v1/enterprise/user-management/authentication/authorization/groups": {
+            get: {
+              summary:
+                "Get all enterprise user management authentication authorization groups from the system database",
+              responses: {},
+            },
+          },
+          "/service/administration/configuration/management/settings/update": {
+            put: {
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithLongFallbackNames)
+
+      const getGroupsTool = tools.get(
+        "GET::api-v1-enterprise-user--management-authentication-authorization-groups",
+      ) as Tool
+      expect(getGroupsTool).toBeDefined()
+      expect(getGroupsTool.name).toBeTruthy()
+      expect(getGroupsTool.name.length).toBeLessThanOrEqual(64)
+      expect(getGroupsTool.name).toMatch(/^[a-z0-9-]+$/)
+
+      const updateSettingsTool = tools.get(
+        "PUT::service-administration-configuration-management-settings-update",
+      ) as Tool
+      expect(updateSettingsTool).toBeDefined()
+      expect(updateSettingsTool.name).toBeTruthy()
+      expect(updateSettingsTool.name.length).toBeLessThanOrEqual(64)
+      expect(updateSettingsTool.name).toMatch(/^[a-z0-9-]+$/)
+    })
+
+    it("should generate consistent tool names for the same fallback input", () => {
+      const specWithDuplicateFallbacks: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: {
+              summary: "Get Users",
+              responses: {},
+            },
+          },
+          "/products": {
+            get: {
+              summary: "Get Users", // Same summary as above
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithDuplicateFallbacks)
+
+      const getUsersTool = tools.get("GET::users") as Tool
+      const getProductsTool = tools.get("GET::products") as Tool
+
+      expect(getUsersTool).toBeDefined()
+      expect(getProductsTool).toBeDefined()
+
+      // Both should have the same name since they have the same summary
+      expect(getUsersTool.name).toBe("get-usrs")
+      expect(getProductsTool.name).toBe("get-usrs")
     })
 
     it("should handle paths with special characters", () => {
@@ -1106,6 +1372,129 @@ paths:
       const result = openAPILoader.abbreviateOperationId(name, maxLength)
       expect(result).toMatch(/^[a-z0-9-]+-[a-f0-9]{4}$/)
       isValidToolName(result)
+    })
+  })
+
+  describe("ExtendedTool metadata", () => {
+    it("should populate metadata fields for filtering", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users/{id}": {
+            get: {
+              operationId: "getUserById",
+              tags: ["users", "profiles"],
+              description: "Get user by ID",
+              responses: {},
+            },
+          },
+          "/api/v1/orders": {
+            post: {
+              operationId: "createOrder",
+              tags: ["orders"],
+              description: "Create a new order",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+
+      const getUserTool = tools.get("GET::users-id") as ExtendedTool
+      expect(getUserTool).toBeDefined()
+      expect(getUserTool.tags).toEqual(["users", "profiles"])
+      expect(getUserTool.httpMethod).toBe("GET")
+      expect(getUserTool.resourceName).toBe("users")
+      expect(getUserTool.originalPath).toBe("/users/{id}")
+
+      const createOrderTool = tools.get("POST::api-v1-orders") as ExtendedTool
+      expect(createOrderTool).toBeDefined()
+      expect(createOrderTool.tags).toEqual(["orders"])
+      expect(createOrderTool.httpMethod).toBe("POST")
+      expect(createOrderTool.resourceName).toBe("orders")
+      expect(createOrderTool.originalPath).toBe("/api/v1/orders")
+    })
+
+    it("should handle operations without tags", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/health": {
+            get: {
+              operationId: "healthCheck",
+              description: "Health check endpoint",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const healthTool = tools.get("GET::health") as ExtendedTool
+
+      expect(healthTool).toBeDefined()
+      expect(healthTool.tags).toEqual([])
+      expect(healthTool.httpMethod).toBe("GET")
+      expect(healthTool.resourceName).toBe("health")
+      expect(healthTool.originalPath).toBe("/health")
+    })
+
+    it("should extract resource names correctly", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users": {
+            get: { operationId: "getUsers", responses: {} },
+          },
+          "/users/{id}": {
+            get: { operationId: "getUserById", responses: {} },
+          },
+          "/users/{id}/posts": {
+            get: { operationId: "getUserPosts", responses: {} },
+          },
+          "/api/v1/products/{id}/reviews": {
+            get: { operationId: "getProductReviews", responses: {} },
+          },
+          "/health": {
+            get: { operationId: "healthCheck", responses: {} },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+
+      expect((tools.get("GET::users") as ExtendedTool).resourceName).toBe("users")
+      expect((tools.get("GET::users-id") as ExtendedTool).resourceName).toBe("users")
+      expect((tools.get("GET::users-id-posts") as ExtendedTool).resourceName).toBe("posts")
+      expect((tools.get("GET::api-v1-products-id-reviews") as ExtendedTool).resourceName).toBe(
+        "reviews",
+      )
+      expect((tools.get("GET::health") as ExtendedTool).resourceName).toBe("health")
+    })
+
+    it("should maintain backward compatibility with x-original-path", () => {
+      const spec: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/users/{id}": {
+            get: {
+              operationId: "getUserById",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(spec)
+      const tool = tools.get("GET::users-id") as any
+
+      expect(tool["x-original-path"]).toBe("/users/{id}")
+      expect((tool as ExtendedTool).originalPath).toBe("/users/{id}")
     })
   })
 })

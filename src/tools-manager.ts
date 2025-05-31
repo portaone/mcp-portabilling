@@ -1,5 +1,5 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
-import { OpenAPISpecLoader } from "./openapi-loader"
+import { OpenAPISpecLoader, ExtendedTool } from "./openapi-loader"
 import { OpenAPIMCPServerConfig } from "./config"
 import { OpenAPIV3 } from "openapi-types"
 import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
@@ -89,16 +89,13 @@ export class ToolsManager {
     const includeToolsLower = this.config.includeTools?.map((t) => t.toLowerCase()) || []
     const includeOperationsLower =
       this.config.includeOperations?.map((op) => op.toLowerCase()) || []
-    const includeResourcesLower = this.config.includeResources || []
+    const includeResourcesLower =
+      this.config.includeResources?.map((res) => res.toLowerCase()) || []
     const includeTagsLower = this.config.includeTags?.map((tag) => tag.toLowerCase()) || []
 
-    // Convert resource paths to lowercase for case-insensitive matching
-    const resourcePathsLower = includeResourcesLower.map((res) => ({
-      exact: `/${res}`.toLowerCase(),
-      prefix: `/${res}/`.toLowerCase(),
-    }))
-
     for (const [toolId, tool] of rawTools.entries()) {
+      const extendedTool = tool as ExtendedTool
+
       // includeTools filter
       if (includeToolsLower.length > 0) {
         const toolIdLower = toolId.toLowerCase()
@@ -113,37 +110,29 @@ export class ToolsManager {
 
       // includeOperations filter
       if (includeOperationsLower.length > 0) {
-        const { method } = this.parseToolId(toolId)
-        if (!includeOperationsLower.includes(method.toLowerCase())) {
+        const httpMethod = extendedTool.httpMethod?.toLowerCase()
+        if (!httpMethod || !includeOperationsLower.includes(httpMethod)) {
           continue
         }
       }
 
       // includeResources filter
-      if (resourcePathsLower.length > 0) {
-        const { path } = this.parseToolId(toolId)
-        const pathLower = path.toLowerCase()
-        // Match exact resource prefix (after leading slash) - case insensitive
-        const match = resourcePathsLower.some(
-          (res) => pathLower === res.exact || pathLower.startsWith(res.prefix),
-        )
-        if (!match) continue
+      if (includeResourcesLower.length > 0) {
+        const resourceName = extendedTool.resourceName?.toLowerCase()
+        if (!resourceName || !includeResourcesLower.includes(resourceName)) {
+          continue
+        }
       }
 
       // includeTags filter
       if (includeTagsLower.length > 0) {
-        // Attempt to read tags from original spec paths
-        const { method, path } = this.parseToolId(toolId)
-        const methodLower = method.toLowerCase() as OpenAPIV3.HttpMethods
-        const pathItem = spec.paths[path] as OpenAPIV3.PathItemObject | undefined
-
-        if (!pathItem) continue
-
-        // Get the operation for the method (get, post, etc.)
-        const opObj = pathItem[methodLower]
-        const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
-        if (!tags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))) continue
+        const toolTags = extendedTool.tags || []
+        const hasMatchingTag = toolTags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))
+        if (!hasMatchingTag) {
+          continue
+        }
       }
+
       filtered.set(toolId, tool)
     }
     this.tools = filtered

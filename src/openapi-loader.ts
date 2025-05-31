@@ -7,6 +7,22 @@ import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./utils/abbr
 import { generateToolId } from "./utils/tool-id.js"
 
 /**
+ * Extended Tool interface with metadata for filtering
+ * This extends the standard MCP Tool interface with additional properties
+ * that are computed during tool creation to optimize filtering operations
+ */
+export interface ExtendedTool extends Tool {
+  /** OpenAPI tags associated with this tool's operation */
+  tags?: string[]
+  /** HTTP method for this tool (GET, POST, etc.) */
+  httpMethod?: string
+  /** Primary resource name extracted from the path */
+  resourceName?: string
+  /** Original OpenAPI path before toolId conversion */
+  originalPath?: string
+}
+
+/**
  * Spec input method type
  */
 export type SpecInputMethod = "url" | "file" | "stdin" | "inline"
@@ -256,6 +272,31 @@ export class OpenAPISpecLoader {
   }
 
   /**
+   * Extract the primary resource name from an OpenAPI path
+   * Examples:
+   * - "/users" -> "users"
+   * - "/users/{id}" -> "users"
+   * - "/api/v1/users/{id}/posts" -> "posts"
+   * - "/health" -> "health"
+   */
+  private extractResourceName(path: string): string | undefined {
+    // Remove leading slash and split by slash
+    const segments = path.replace(/^\//, "").split("/")
+
+    // Find the last segment that doesn't contain parameter placeholders
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const segment = segments[i]
+      // Skip parameter placeholders like {id}, {userId}, etc.
+      if (!segment.includes("{") && !segment.includes("}") && segment.length > 0) {
+        return segment
+      }
+    }
+
+    // If no non-parameter segment found, return the first segment
+    return segments[0] || undefined
+  }
+
+  /**
    * Parse an OpenAPI specification into a map of tools
    */
   parseOpenAPISpec(spec: OpenAPIV3.Document): Map<string, Tool> {
@@ -284,16 +325,21 @@ export class OpenAPISpecLoader {
         const nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)
 
-        const tool: Tool = {
+        const tool: ExtendedTool = {
           name,
           description: op.description || `Make a ${method.toUpperCase()} request to ${path}`,
           inputSchema: {
             type: "object",
             properties: {},
           },
+          // Add metadata for filtering
+          tags: op.tags || [],
+          httpMethod: method.toUpperCase(),
+          resourceName: this.extractResourceName(path),
+          originalPath: path,
         }
 
-        // Store the original path for API client use
+        // Store the original path for API client use (backward compatibility)
         ;(tool as any)["x-original-path"] = path
 
         // Gather all required property names
