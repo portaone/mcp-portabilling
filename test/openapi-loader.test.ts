@@ -378,7 +378,7 @@ paths:
       const toolId = Array.from(tools.keys())[0]
 
       // Should not be abbreviated
-      expect(toolId).toContain("GET::users-management-authorization-groups")
+      expect(toolId).toContain("GET::users-management-authorization--groups")
       const tool = tools.get(toolId)!
       expect(tool.name).toContain("get-user-management-authorization-groups")
     })
@@ -452,7 +452,7 @@ paths:
       }
 
       const tools = openAPILoader.parseOpenAPISpec(specWithSpecialChars)
-      expect(tools.has("GET::api-v1-user-profiles")).toBe(true)
+      expect(tools.has("GET::api-v1-user--profiles")).toBe(true)
     })
 
     it("should handle empty paths object", () => {
@@ -880,10 +880,10 @@ paths:
 
       // Validate that all expected toolIds are generated with :: separator
       const expectedToolIds = [
-        "GET::user_profile-data",
-        "POST::api_v1-user-management",
-        "PUT::service_users-authority_groups",
-        "DELETE::user-profile_data",
+        "GET::user_profile--data",
+        "POST::api_v1--user--management",
+        "PUT::service_users--authority_groups",
+        "DELETE::user--profile_data",
       ]
 
       for (const expectedToolId of expectedToolIds) {
@@ -900,13 +900,13 @@ paths:
       }
 
       // Validate that the tools are correctly created
-      const getUserProfileDataTool = tools.get("GET::user_profile-data")!
+      const getUserProfileDataTool = tools.get("GET::user_profile--data")!
       expect(getUserProfileDataTool).toBeDefined()
       // Just verify the tool exists and has a reasonable name, don't check exact abbreviation
       expect(getUserProfileDataTool.name).toBeTruthy()
       expect(getUserProfileDataTool.name.length).toBeGreaterThan(0)
 
-      const createUserManagementTool = tools.get("POST::api_v1-user-management")!
+      const createUserManagementTool = tools.get("POST::api_v1--user--management")!
       expect(createUserManagementTool).toBeDefined()
       // Just verify the tool exists and has a reasonable name, don't check exact abbreviation
       expect(createUserManagementTool.name).toBeTruthy()

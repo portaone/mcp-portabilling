@@ -113,11 +113,16 @@ describe("Tool ID Utilities", () => {
 
       it("should remove leading and trailing hyphens after sanitization", () => {
         const result = generateToolId("DELETE", "/-api-/users/-")
-        expect(result).toBe("DELETE::api-users")
+        // With hyphen escaping: /-api-/users/- becomes -api--users- (after removing leading slash and escaping hyphens)
+        // Then slashes become hyphens: api---users (the middle hyphen was escaped to --, then slash became -)
+        // After sanitization, leading/trailing hyphens are removed: api---users (no leading/trailing hyphens to remove)
+        expect(result).toBe("DELETE::api---users")
       })
 
       it("should collapse multiple consecutive hyphens", () => {
         const result = generateToolId("GET", "/api///v1///users")
+        // Multiple slashes are collapsed first: /api/v1/users
+        // Then converted: api-v1-users (no hyphens to escape in this case)
         expect(result).toBe("GET::api-v1-users")
       })
 
@@ -151,7 +156,9 @@ describe("Tool ID Utilities", () => {
 
       it("should maintain alphanumeric characters and allowed symbols", () => {
         const result = generateToolId("PATCH", "/api123/user_data-v2/settings")
-        expect(result).toBe("PATCH::api123-user_data-v2-settings")
+        // The hyphen in "user_data-v2" gets escaped: user_data--v2
+        // Then slashes become hyphens: api123-user_data--v2-settings
+        expect(result).toBe("PATCH::api123-user_data--v2-settings")
       })
     })
   })
@@ -182,6 +189,45 @@ describe("Tool ID Utilities", () => {
       }
     })
 
+    it("should handle paths with legitimate hyphens in segments (REGRESSION FIX)", () => {
+      // These are the specific cases mentioned in the improvement plan
+      const pathsWithHyphens = [
+        "/api/resource-name/items",
+        "/user-profile/data",
+        "/api/v1/user-management/groups",
+        "/service-users/authority-groups",
+        "/complex-path/with-many-hyphens/in-segments",
+        "/api/multi-word-resource/sub-resource/action",
+        "/v2/user-accounts/account-settings/privacy-controls",
+      ]
+
+      for (const originalPath of pathsWithHyphens) {
+        const method = "GET"
+
+        // Generate toolId
+        const toolId = generateToolId(method, originalPath)
+
+        // Parse it back
+        const parsed = parseToolId(toolId)
+
+        // Should be unambiguous and consistent
+        expect(parsed.method).toBe(method)
+
+        // The key fix: parsed path should exactly match the original path
+        // This verifies that hyphens in path segments are preserved correctly
+        expect(parsed.path).toBe(originalPath)
+
+        // ToolId should use :: separator and contain escaped hyphens
+        expect(toolId).toContain("::")
+        expect(toolId.split("::")).toHaveLength(2)
+
+        // Verify that the toolId contains escaped hyphens (--) for legitimate hyphens
+        if (originalPath.includes("-")) {
+          expect(toolId).toContain("--")
+        }
+      }
+    })
+
     it("should handle the original problematic cases that caused ambiguity", () => {
       const problematicPaths = [
         "/user_profile-data",
@@ -204,15 +250,101 @@ describe("Tool ID Utilities", () => {
         // Should be unambiguous and consistent
         expect(parsed.method).toBe(method)
 
-        // The parsed path will have hyphens converted back to slashes
-        // This reconstructs the API path structure for HTTP requests
-        const expectedPath = path.replace(/-/g, "/")
-        expect(parsed.path).toBe(expectedPath)
+        // With the new escaping, the parsed path should exactly match the original path
+        // This is the fix - hyphens are now preserved correctly!
+        expect(parsed.path).toBe(path)
 
         // ToolId should use :: separator
         expect(toolId).toContain("::")
         expect(toolId.split("::")).toHaveLength(2)
       }
+    })
+
+    it("should demonstrate the difference from old broken behavior", () => {
+      // This test shows how the old behavior was broken and the new behavior fixes it
+      const pathWithHyphens = "/api/resource-name/items"
+      const method = "GET"
+
+      const toolId = generateToolId(method, pathWithHyphens)
+      const parsed = parseToolId(toolId)
+
+      // NEW BEHAVIOR (correct): Hyphens are preserved
+      expect(parsed.path).toBe("/api/resource-name/items")
+      expect(toolId).toBe("GET::api-resource--name-items")
+
+      // OLD BEHAVIOR would have been:
+      // toolId: "GET::api-resource-name-items" (no escaping)
+      // parsed.path: "/api/resource/name/items" (incorrect - hyphens became slashes)
+
+      // Verify the toolId contains escaped hyphens
+      expect(toolId).toContain("--")
+    })
+
+    it("should handle edge cases with hyphen escaping", () => {
+      const edgeCases = [
+        { path: "/api/trailing-hyphen-/test", description: "path with trailing hyphen in segment" },
+        {
+          path: "/api/mixed_under-score-hyphen/test",
+          description: "path with mixed underscores and hyphens",
+        },
+      ]
+
+      for (const { path, description } of edgeCases) {
+        const method = "POST"
+        const toolId = generateToolId(method, path)
+        const parsed = parseToolId(toolId)
+
+        // The round-trip should preserve the original path structure
+        expect(parsed.path).toBe(path)
+        expect(parsed.method).toBe(method)
+
+        // Should use :: separator
+        expect(toolId).toContain("::")
+        expect(toolId.split("::")).toHaveLength(2)
+      }
+    })
+
+    it("should handle edge case with leading hyphen in segment", () => {
+      // Leading hyphens in segments create a special case due to sanitization
+      const pathWithLeadingHyphen = "/api/-leading-hyphen/test"
+      const method = "POST"
+
+      const toolId = generateToolId(method, pathWithLeadingHyphen)
+      const parsed = parseToolId(toolId)
+
+      // Due to sanitization removing leading hyphens, this case has a limitation
+      expect(parsed.path).toBe("/api-/leading-hyphen/test")
+      expect(parsed.method).toBe(method)
+
+      // The toolId should still be valid
+      expect(toolId).toContain("::")
+      expect(toolId.split("::")).toHaveLength(2)
+    })
+
+    it("should handle limitation with consecutive hyphens in original path", () => {
+      // This test documents a known limitation: paths with consecutive hyphens
+      // in the original path segments cannot be perfectly round-tripped due to
+      // the inherent ambiguity in the escaping scheme.
+      // This is an extremely rare edge case in real-world APIs.
+
+      const pathWithConsecutiveHyphens = "/api/--double-hyphen/test"
+      const method = "GET"
+
+      const toolId = generateToolId(method, pathWithConsecutiveHyphens)
+      const parsed = parseToolId(toolId)
+
+      // The parsed path will be different due to the escaping ambiguity
+      expect(parsed.path).toBe("/api--/double-hyphen/test")
+      expect(parsed.method).toBe(method)
+
+      // This is a known limitation - consecutive hyphens in original path segments
+      // create ambiguity in the escaping scheme. However, this is extremely rare
+      // in real-world REST APIs, which typically use single hyphens as separators.
+      expect(parsed.path).not.toBe(pathWithConsecutiveHyphens)
+
+      // The toolId should still be valid
+      expect(toolId).toContain("::")
+      expect(toolId.split("::")).toHaveLength(2)
     })
 
     it("should handle round-trip with sanitized special characters", () => {
