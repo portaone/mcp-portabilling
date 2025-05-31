@@ -123,13 +123,16 @@ These issues affect multiple parts of the system or represent significant gaps i
 
 ### ✅ 1. Hyphen Handling in Tool IDs and Paths (Critical)
 
-- **Problem**: Inconsistent handling of hyphens (`-`) between `generateToolId` (which preserves hyphens from original path segments and converts slashes `/` to hyphens) and `parseToolId` (which converts all hyphens in the `toolId`'s path part back to slashes). This can lead to incorrect API call URLs if an original OpenAPI path segment legitimately contains a hyphen (e.g., `/api/resource-name/items`).
+- **Problem**: Inconsistent handling of hyphens (`-`) between `generateToolId` (which previously preserved hyphens from original path segments and converted slashes `/` to hyphens) and `parseToolId` (which previously converted all hyphens in the `toolId`'s path part back to slashes). This could lead to incorrect API call URLs if an original OpenAPI path segment legitimately contains a hyphen (e.g., `/api/resource-name/items`). This ambiguity has been resolved.
 - **Affected Files**: `tool-id-utils.test.ts`, `openapi-loader.test.ts`, `api-client.test.ts`, `tools-manager.test.ts`.
-- **Proposed Action**:
-  - Re-evaluate the `toolId` generation and parsing strategy.
-  - **Option A (Recommended)**: Modify `generateToolId` (in `OpenAPISpecLoader` context) to escape legitimate hyphens within path segments (e.g., `resource-name` becomes `resource--name` in the ID part). Slashes would still become a single hyphen. `parseToolId` would then be updated to unescape `--` to `-` and convert single hyphens (not part of an escaped sequence) to `/`.
-  - **Option B**: Use a different, unambiguous separator character for joining path segments in the `toolId` if hyphens from original segments are to be preserved as-is.
-  - **Testing**: Add specific test cases in `tool-id-utils.test.ts` and integration tests in `openapi-loader.test.ts` and `api-client.test.ts` for paths with legitimate hyphens in segments, ensuring correct round-trip conversion and URL generation.
+- **Solution Implemented**:
+  - The `toolId` generation and parsing strategy was re-evaluated, and Option B (using a different, unambiguous separator) was chosen and implemented.
+  - **Double underscores (`__`)** are now used as the separator for path segments within a tool ID (e.g., `GET::api__v1__users__user-id`).
+  - Legitimate hyphens within original OpenAPI path segments (e.g., `user-id`) are preserved as-is.
+  - Slashes (`/`) in the original path are converted to double underscores (`__`) during `toolId` generation.
+  - `parseToolId` now splits the method and path part using `::`, and then replaces all occurrences of `__` in the path part with `/` to reconstruct the original API path.
+  - This approach eliminates the need for complex hyphen escaping and resolves the ambiguity.
+  - **Testing**: Comprehensive test cases were added in `tool-id-utils.test.ts`, and integration tests were updated in `openapi-loader.test.ts`, `api-client.test.ts`, and `tools-manager.test.ts` to ensure correct round-trip conversion and URL generation with the new double underscore system.
 
 ### ✅ 2. `OpenAPISpecLoader`: Missing `operationId` Fallback for `tool.name`
 

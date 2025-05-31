@@ -1,0 +1,6 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+Never try to run a test-script from commandline using `node -e`. This will always fail, you'll need to write a typescript test file, build that and execute that.

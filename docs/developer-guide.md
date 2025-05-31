@@ -77,33 +77,31 @@ Tool IDs uniquely identify API endpoints and have the format: `METHOD::pathPart`
 Examples:
 
 - `GET::users` → GET /users
-- `POST::api-v1-users` → POST /api/v1/users
-- `GET::api-resource--name-items` → GET /api/resource-name/items
+- `POST::api__v1__users` → POST /api/v1/users
+- `GET::api__resource-name__items` → GET /api/resource-name/items
 
-### Hyphen Escaping Scheme
+### Path Separation Scheme
 
-**Critical for developers**: The tool ID system uses a sophisticated hyphen escaping scheme to handle legitimate hyphens in OpenAPI path segments.
+**Critical for developers**: The tool ID system uses double underscores (`__`) as a separator for path segments. This approach is robust and avoids the complexities of hyphen-escaping schemes.
 
-#### The Problem
+#### The Problem (Simplified)
 
-OpenAPI paths can contain legitimate hyphens in segments (e.g., `/api/resource-name/items`). Since tool IDs use hyphens to separate path segments, we need to distinguish between:
-
-- **Separator hyphens**: Replace slashes (`/`) in the original path
-- **Legitimate hyphens**: Actual hyphens in path segment names
+OpenAPI paths (e.g., `/api/v1/users`, `/api/resource-name/items`) need to be converted into a flat string format for tool IDs. A clear separator is needed to distinguish between different segments of the original path. Legitimate hyphens within path segments (e.g., `resource-name`) must be preserved.
 
 #### The Solution
 
-- **Legitimate hyphens** in path segments are escaped as **double hyphens** (`--`)
-- **Separator hyphens** (from slashes) remain as **single hyphens** (`-`)
+- **Double underscores (`__`)** are used to replace slashes (`/`) from the original path.
+- **Legitimate hyphens** within path segments are preserved as-is.
 
 #### Examples
 
-| Original Path              | Tool ID                         | Parsed Back                |
-| -------------------------- | ------------------------------- | -------------------------- |
-| `/users`                   | `GET::users`                    | `/users`                   |
-| `/api/v1/users`            | `GET::api-v1-users`             | `/api/v1/users`            |
-| `/api/resource-name/items` | `GET::api-resource--name-items` | `/api/resource-name/items` |
-| `/user-profile/data`       | `GET::user--profile-data`       | `/user-profile/data`       |
+| Original Path              | Tool ID                          | Parsed Back                |
+| -------------------------- | -------------------------------- | -------------------------- |
+| `/users`                   | `GET::users`                     | `/users`                   |
+| `/api/v1/users`            | `GET::api__v1__users`            | `/api/v1/users`            |
+| `/api/resource-name/items` | `GET::api__resource-name__items` | `/api/resource-name/items` |
+| `/user-profile/data`       | `GET::user-profile__data`        | `/user-profile/data`       |
+| `/a_b/c-d/e_f-g`           | `GET::a_b__c-d__e_f-g`           | `/a_b/c-d/e_f-g`           |
 
 #### Implementation Details
 
@@ -112,45 +110,36 @@ OpenAPI paths can contain legitimate hyphens in segments (e.g., `/api/resource-n
 ```typescript
 const cleanPath = path
   .replace(/^\//, "") // Remove leading slash
-  .replace(/\/+/g, "/") // Collapse multiple slashes
-  .replace(/\{([^}]+)\}/g, "$1") // Remove path parameter braces
-  .replace(/-/g, "--") // Escape legitimate hyphens
-  .replace(/\//g, "-") // Convert slashes to hyphens
+  .replace(/\/+/g, "/") // Collapse multiple consecutive slashes to single slash
+  .replace(/\{([^}]+)\}/g, "$1") // Remove curly braces from path params
+  .replace(/\//g, "__") // Convert slashes to double underscores
+
+const sanitizedPath = sanitizeForToolId(cleanPath) // Apply further sanitization
+
+return `${method.toUpperCase()}::${sanitizedPath}`
 ```
 
 **Parsing (`parseToolId`)**:
 
 ```typescript
-// Parse character by character to handle escaped hyphens
-while (i < pathPart.length) {
-  if (pathPart[i] === "-") {
-    if (i + 1 < pathPart.length && pathPart[i + 1] === "-") {
-      result += "-" // Escaped hyphen becomes literal hyphen
-      i += 2
-    } else {
-      result += "/" // Single hyphen becomes slash
-      i += 1
-    }
-  } else {
-    result += pathPart[i]
-    i += 1
-  }
-}
+const [method, pathPart] = toolId.split("::", 2)
+// Simply replace double underscores with slashes
+const path = pathPart.replace(/__/g, "/")
+return { method, path: "/" + path }
 ```
 
 #### Character Sanitization
 
-Tool IDs are sanitized to contain only safe characters `[A-Za-z0-9_-]`:
+Tool IDs are sanitized by the `sanitizeForToolId` helper function to ensure they contain only safe characters `[A-Za-z0-9_-]`. The process involves:
 
-- Special characters are removed
-- Unicode characters are removed
-- Leading/trailing hyphens are removed
-- Multiple consecutive slashes are collapsed
+- **Removing disallowed characters**: Any character not in `A-Za-z0-9_-` is removed.
+- **Collapsing underscores**: Sequences of three or more underscores (`___`, `____`, etc.) are collapsed to a double underscore (`__`). This preserves the `__` path separator if an original path segment happened to contain multiple underscores that were then joined by `__`.
+- **Trimming**: Leading or trailing underscores (`_`) and hyphens (`-`) are removed from the final sanitized path part.
+- **Original path structure**: Note that operations like collapsing multiple slashes (`//` to `/`) in the original path happen _before_ sanitization during the `generateToolId`'s path cleaning phase.
 
 #### Known Limitations
 
-1. **Consecutive hyphens in original paths**: Paths with `--` in the original segments cannot be perfectly round-tripped due to escaping ambiguity. This is extremely rare in real-world APIs.
-2. **Leading hyphens in segments**: Due to sanitization removing leading hyphens, segments starting with `-` may not round-trip perfectly.
+(This section can be removed as the previous limitations were specific to the hyphen-escaping scheme. The double underscore system is much simpler and avoids those issues. If new limitations are identified, they can be added here.)
 
 ## Tool Name Abbreviation System
 
@@ -544,7 +533,7 @@ All code must have comprehensive JSDoc documentation:
  *
  * @example
  * parseToolId("GET::users") → { method: "GET", path: "/users" }
- * parseToolId("GET::api-resource--name-items") → { method: "GET", path: "/api/resource-name/items" }
+ * parseToolId("GET::api__resource-name__items") → { method: "GET", path: "/api/resource-name/items" }
  */
 ```
 

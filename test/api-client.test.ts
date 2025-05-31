@@ -131,7 +131,7 @@ describe("ApiClient", () => {
 
   describe("executeApiCall", () => {
     it("should make GET request with correct parameters", async () => {
-      await apiClient.executeApiCall("GET::users-list", { page: 1, limit: 10 })
+      await apiClient.executeApiCall("GET::users__list", { page: 1, limit: 10 })
 
       expect(mockAxiosInstance).toHaveBeenCalledWith({
         method: "get",
@@ -142,8 +142,8 @@ describe("ApiClient", () => {
     })
 
     it("should make POST request with correct body", async () => {
-      await apiClient.executeApiCall("POST::users-create", {
-        name: "John",
+      await apiClient.executeApiCall("POST::users__create", {
+        name: "John Doe",
         email: "john@example.com",
       })
 
@@ -151,7 +151,7 @@ describe("ApiClient", () => {
         method: "post",
         url: "/users/create",
         headers: { "X-API-Key": "test-key" },
-        data: { name: "John", email: "john@example.com" },
+        data: { name: "John Doe", email: "john@example.com" },
       })
     })
 
@@ -199,7 +199,7 @@ describe("ApiClient", () => {
     })
 
     it("should convert array parameters to comma-separated strings for GET requests", async () => {
-      await apiClient.executeApiCall("GET::users-search", { tags: ["admin", "active"] })
+      await apiClient.executeApiCall("GET::users__search", { tags: ["admin", "active"] })
 
       expect(mockAxiosInstance).toHaveBeenCalledWith({
         method: "get",
@@ -210,7 +210,7 @@ describe("ApiClient", () => {
     })
 
     it("should return response data on successful request", async () => {
-      const result = await apiClient.executeApiCall("GET::users-list", {})
+      const result = await apiClient.executeApiCall("GET::users__list", {})
       expect(result).toEqual({ result: "success" })
     })
 
@@ -224,7 +224,7 @@ describe("ApiClient", () => {
       mockAxiosInstance.mockRejectedValueOnce(axiosError)
       vi.mocked(axios.isAxiosError).mockReturnValueOnce(true)
 
-      await expect(apiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(apiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         'API request failed: Request failed (404: {"error":"Not found"})',
       )
     })
@@ -234,7 +234,9 @@ describe("ApiClient", () => {
       mockAxiosInstance.mockRejectedValueOnce(error)
       vi.mocked(axios.isAxiosError).mockReturnValueOnce(false)
 
-      await expect(apiClient.executeApiCall("GET::users-list", {})).rejects.toThrow("Network error")
+      await expect(apiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
+        "Network error",
+      )
     })
 
     it("should handle 500 errors properly", async () => {
@@ -247,13 +249,13 @@ describe("ApiClient", () => {
       mockAxiosInstance.mockRejectedValueOnce(axiosError)
       vi.mocked(axios.isAxiosError).mockReturnValueOnce(true)
 
-      await expect(apiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(apiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         'API request failed: Network error (500: {"error":"Internal Server Error"})',
       )
     })
 
     it("should replace path parameters in URL correctly and remove them from query parameters", async () => {
-      await apiClient.executeApiCall("GET::pet-petId", { petId: 1, filter: "all" })
+      await apiClient.executeApiCall("GET::pet__petId", { petId: 1, filter: "all" })
       expect(mockAxiosInstance).toHaveBeenCalledWith({
         method: "get",
         url: "/pet/1",
@@ -263,7 +265,7 @@ describe("ApiClient", () => {
     })
 
     it("should handle multiple path parameters correctly", async () => {
-      await apiClient.executeApiCall("GET::store-order-orderId-item-itemId", {
+      await apiClient.executeApiCall("GET::store__order__orderId__item__itemId", {
         orderId: 123,
         itemId: 456,
         format: "json",
@@ -301,11 +303,11 @@ describe("ApiClient", () => {
 
         // Set up the tool in the client
         const toolsMap = new Map()
-        toolsMap.set("GET::user-userId", mockTool)
+        toolsMap.set("GET::user__userId", mockTool)
         apiClient.setTools(toolsMap)
 
         // Execute the call with both path and query params
-        await apiClient.executeApiCall("GET::user-userId", {
+        await apiClient.executeApiCall("GET::user__userId", {
           userId: "user123",
           fields: "name,email",
         })
@@ -346,10 +348,10 @@ describe("ApiClient", () => {
         }
 
         const toolsMap = new Map()
-        toolsMap.set("GET::user-userId", mockTool)
+        toolsMap.set("GET::user__userId", mockTool)
         apiClient.setTools(toolsMap)
 
-        await apiClient.executeApiCall("GET::user-userId", {
+        await apiClient.executeApiCall("GET::user__userId", {
           userId: "user123",
           "X-Custom-Header": "custom-value",
           queryParam: "query-value",
@@ -392,10 +394,10 @@ describe("ApiClient", () => {
         }
 
         const toolsMap = new Map()
-        toolsMap.set("GET::user-userId", mockTool)
+        toolsMap.set("GET::user__userId", mockTool)
         apiClient.setTools(toolsMap)
 
-        await apiClient.executeApiCall("GET::user-userId", {
+        await apiClient.executeApiCall("GET::user__userId", {
           userId: "user123",
           sessionId: "session-abc123",
           queryParam: "query-value",
@@ -453,10 +455,10 @@ describe("ApiClient", () => {
         }
 
         const toolsMap = new Map()
-        toolsMap.set("GET::resource-resourceId-sub-subResourceId", mockTool)
+        toolsMap.set("GET::resource__resourceId__sub__subResourceId", mockTool)
         apiClient.setTools(toolsMap)
 
-        await apiClient.executeApiCall("GET::resource-resourceId-sub-subResourceId", {
+        await apiClient.executeApiCall("GET::resource__resourceId__sub__subResourceId", {
           resourceId: "res123",
           subResourceId: "sub456",
           Authorization: "Bearer token123",
@@ -483,7 +485,7 @@ describe("ApiClient", () => {
     describe("Parameter Handling without Schema Hints", () => {
       it("should infer path parameters from toolId when no tool definition available", async () => {
         // Don't set any tools, so no schema hints available
-        await apiClient.executeApiCall("GET::users-userId-posts-postId", {
+        await apiClient.executeApiCall("GET::users__userId__posts__postId", {
           userId: "user123",
           postId: "post456",
           filter: "published",
@@ -498,8 +500,8 @@ describe("ApiClient", () => {
       })
 
       it("should handle edge case where argument matches path segment but not all segments have values", async () => {
-        // toolId: "GET::a-b-c", args: {a:1, c:3} - what happens to 'b'?
-        await apiClient.executeApiCall("GET::a-b-c", { a: 1, c: 3 })
+        // toolId: "GET::a__b__c", args: {a:1, c:3} - what happens to 'b'?
+        await apiClient.executeApiCall("GET::a__b__c", { a: 1, c: 3 })
 
         // Current behavior: only replaces segments that have matching arguments
         expect(mockAxiosInstance).toHaveBeenCalledWith({
@@ -511,7 +513,7 @@ describe("ApiClient", () => {
       })
 
       it("should handle case where no arguments match path segments", async () => {
-        await apiClient.executeApiCall("GET::users-profile", { filter: "active", limit: 10 })
+        await apiClient.executeApiCall("GET::users__profile", { filter: "active", limit: 10 })
 
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
@@ -523,7 +525,7 @@ describe("ApiClient", () => {
 
       it("should handle partial path parameter matches without tool definition", async () => {
         // Some params match path segments, others don't
-        await apiClient.executeApiCall("GET::api-version-users-userId", {
+        await apiClient.executeApiCall("GET::api__version__users__userId", {
           userId: "user123",
           version: "v2",
           format: "json",
@@ -539,7 +541,7 @@ describe("ApiClient", () => {
       })
 
       it("should handle empty arguments with path-like toolId", async () => {
-        await apiClient.executeApiCall("GET::users-userId-posts", {})
+        await apiClient.executeApiCall("GET::users__userId__posts", {})
 
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
@@ -550,7 +552,7 @@ describe("ApiClient", () => {
       })
 
       it("should handle arguments with special characters in path replacement", async () => {
-        await apiClient.executeApiCall("GET::users-userId", {
+        await apiClient.executeApiCall("GET::users__userId", {
           userId: "user@123.com",
           filter: "special&chars",
         })
@@ -566,8 +568,8 @@ describe("ApiClient", () => {
 
     describe("Hyphen Handling in Tool IDs", () => {
       it("should correctly handle toolId with legitimate hyphens in path segments", async () => {
-        // Test the critical hyphen handling issue from the improvement plan
-        await apiClient.executeApiCall("GET::api-resource--name-items", { filter: "all" })
+        // Test the critical hyphen handling - now much simpler with double underscores
+        await apiClient.executeApiCall("GET::api__resource-name__items", { filter: "all" })
 
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
@@ -577,8 +579,8 @@ describe("ApiClient", () => {
         })
       })
 
-      it("should handle multiple escaped hyphens in different segments", async () => {
-        await apiClient.executeApiCall("GET::api-user--profile-data--store", { userId: "123" })
+      it("should handle multiple hyphens in different segments", async () => {
+        await apiClient.executeApiCall("GET::api__user-profile__data-store", { userId: "123" })
 
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
@@ -605,15 +607,15 @@ describe("ApiClient", () => {
         }
 
         const toolsMap = new Map()
-        toolsMap.set("GET::api-resource--name-resource--id", mockTool)
+        toolsMap.set("GET::api__resource-name__resource-id", mockTool)
         apiClient.setTools(toolsMap)
 
-        await apiClient.executeApiCall("GET::api-resource--name-resource--id", {
+        await apiClient.executeApiCall("GET::api__resource-name__resource-id", {
           "resource-id": "res-123",
           filter: "active",
         })
 
-        // The path should be reconstructed correctly with escaped hyphens
+        // The path should be reconstructed correctly with hyphens preserved
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
           url: "/api/resource-name/res-123",
@@ -622,13 +624,13 @@ describe("ApiClient", () => {
         })
       })
 
-      it("should handle edge case with consecutive escaped hyphens", async () => {
-        // Test ----existing--double pattern from generateToolId example
-        await apiClient.executeApiCall("GET::api----existing--double-test", {})
+      it("should handle edge case with consecutive hyphens", async () => {
+        // Test --existing-double pattern - now much clearer
+        await apiClient.executeApiCall("GET::api__--existing-double__test", {})
 
         expect(mockAxiosInstance).toHaveBeenCalledWith({
           method: "get",
-          url: "/api--existing-double/test",
+          url: "/api/--existing-double/test",
           headers: { "X-API-Key": "test-key" },
           params: {},
         })
@@ -638,15 +640,15 @@ describe("ApiClient", () => {
         // Test that generateToolId -> parseToolId -> URL reconstruction works correctly
         const testCases = [
           {
-            toolId: "GET::api-resource--name-items",
+            toolId: "GET::api__resource-name__items",
             expectedPath: "/api/resource-name/items",
           },
           {
-            toolId: "POST::user--profile-data--store",
+            toolId: "POST::user-profile__data-store",
             expectedPath: "/user-profile/data-store",
           },
           {
-            toolId: "PUT::api-v1-multi--hyphen--segments",
+            toolId: "PUT::api__v1__multi-hyphen-segments",
             expectedPath: "/api/v1/multi-hyphen-segments",
           },
         ]
@@ -687,11 +689,11 @@ describe("ApiClient", () => {
 
       // Set up the tool in the client
       const toolsMap = new Map()
-      toolsMap.set("GET::search-results", mockTool)
+      toolsMap.set("GET::search__results", mockTool)
       apiClient.setTools(toolsMap)
 
       // Execute with a param that matches a path segment but is not a path param
-      await apiClient.executeApiCall("GET::search-results", {
+      await apiClient.executeApiCall("GET::search__results", {
         query: "test",
         results: "json",
       })
@@ -724,7 +726,7 @@ describe("ApiClient", () => {
 
       // Set up the tool in the client and mock parseToolId to return path with {userId}
       const toolsMap = new Map()
-      toolsMap.set("GET::user-userId", mockTool)
+      toolsMap.set("GET::user__userId", mockTool)
       apiClient.setTools(toolsMap)
 
       // Mock the parseToolId method to return a path with curly braces format
@@ -735,7 +737,7 @@ describe("ApiClient", () => {
       })
 
       // Execute the call
-      await apiClient.executeApiCall("GET::user-userId", { userId: "user123" })
+      await apiClient.executeApiCall("GET::user__userId", { userId: "user123" })
 
       // Verify the correct URL was constructed
       expect(mockAxiosInstance).toHaveBeenCalledWith({
@@ -768,7 +770,7 @@ describe("ApiClient", () => {
 
       // Set up the tool in the client and mock parseToolId to return path with :userId
       const toolsMap = new Map()
-      toolsMap.set("GET::user-userId", mockTool)
+      toolsMap.set("GET::user__userId", mockTool)
       apiClient.setTools(toolsMap)
 
       // Mock the parseToolId method to return a path with Express format
@@ -779,7 +781,7 @@ describe("ApiClient", () => {
       })
 
       // Execute the call
-      await apiClient.executeApiCall("GET::user-userId", { userId: "user123" })
+      await apiClient.executeApiCall("GET::user__userId", { userId: "user123" })
 
       // Verify the correct URL was constructed
       expect(mockAxiosInstance).toHaveBeenCalledWith({
@@ -813,7 +815,7 @@ describe("ApiClient", () => {
 
       // Set up the tool in the client
       const toolsMap = new Map()
-      toolsMap.set("GET::data-param", mockTool)
+      toolsMap.set("GET::data__param", mockTool)
       apiClient.setTools(toolsMap)
 
       // Mock the parseToolId method to return a path with special parameter
@@ -824,7 +826,7 @@ describe("ApiClient", () => {
       })
 
       // Execute the call
-      await apiClient.executeApiCall("GET::data-param", { "param.with*special+chars": "value123" })
+      await apiClient.executeApiCall("GET::data__param", { "param.with*special+chars": "value123" })
 
       // Verify the correct URL was constructed
       expect(mockAxiosInstance).toHaveBeenCalledWith({
@@ -844,17 +846,17 @@ describe("ApiClient", () => {
 
       const testCases = [
         {
-          toolId: "GET::user_profile-data",
+          toolId: "GET::user_profile__data",
           expectedPath: "/user_profile/data",
           expectedMethod: "get",
         },
         {
-          toolId: "POST::api-v1-user-management",
+          toolId: "POST::api__v1__user__management",
           expectedPath: "/api/v1/user/management",
           expectedMethod: "post",
         },
         {
-          toolId: "PUT::service_users-authority_groups",
+          toolId: "PUT::service_users__authority_groups",
           expectedPath: "/service_users/authority_groups",
           expectedMethod: "put",
         },
@@ -871,11 +873,22 @@ describe("ApiClient", () => {
         )
       }
     })
+
+    it("should handle hyphens in path segments", async () => {
+      await apiClient.executeApiCall("POST::api__v1__user-profile", {})
+
+      expect(mockAxiosInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "post",
+          url: "/api/v1/user-profile",
+        }),
+      )
+    })
   })
 
   describe("parseToolId", () => {
     it("should correctly parse tool ID into method and path", async () => {
-      await apiClient.executeApiCall("GET::users-profile-details", {})
+      await apiClient.executeApiCall("GET::users__profile__details", {})
 
       expect(mockAxiosInstance).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -886,12 +899,12 @@ describe("ApiClient", () => {
     })
 
     it("should handle hyphens in path segments", async () => {
-      await apiClient.executeApiCall("POST::api-v1-user-profile", {})
+      await apiClient.executeApiCall("POST::api__v1__user-profile", {})
 
       expect(mockAxiosInstance).toHaveBeenCalledWith(
         expect.objectContaining({
           method: "post",
-          url: "/api/v1/user/profile",
+          url: "/api/v1/user-profile",
         }),
       )
     })
@@ -919,7 +932,7 @@ describe("ApiClient", () => {
     })
 
     it("should call getAuthHeaders before each request", async () => {
-      await authApiClient.executeApiCall("GET::users-list", {})
+      await authApiClient.executeApiCall("GET::users__list", {})
 
       expect(mockAuthProvider.getAuthHeaders).toHaveBeenCalledTimes(1)
       expect(mockAxiosInstance).toHaveBeenCalledWith(
@@ -936,7 +949,7 @@ describe("ApiClient", () => {
       mockAxiosInstance.mockRejectedValueOnce(authError)
       vi.mocked(axios.isAxiosError).mockReturnValue(true)
 
-      await expect(authApiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(authApiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         'API request failed: Unauthorized (401: {"error":"Unauthorized"})',
       )
 
@@ -962,7 +975,7 @@ describe("ApiClient", () => {
         .mockResolvedValueOnce({ Authorization: "Bearer token123" }) // First call
         .mockResolvedValueOnce({ Authorization: "Bearer fresh-token" }) // Retry call
 
-      const result = await authApiClient.executeApiCall("GET::users-list", {})
+      const result = await authApiClient.executeApiCall("GET::users__list", {})
 
       expect(result).toEqual({ result: "success after retry" })
       expect(mockAuthProvider.handleAuthError).toHaveBeenCalledWith(authError)
@@ -985,7 +998,7 @@ describe("ApiClient", () => {
       mockAxiosInstance.mockRejectedValueOnce(networkError)
       vi.mocked(axios.isAxiosError).mockReturnValue(true)
 
-      await expect(authApiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(authApiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         'API request failed: Network error (500: {"error":"Internal Server Error"})',
       )
 
@@ -1006,7 +1019,7 @@ describe("ApiClient", () => {
       // Mock auth provider to return true for retry
       vi.mocked(mockAuthProvider.handleAuthError).mockResolvedValueOnce(true)
 
-      await expect(authApiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(authApiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         'API request failed: Unauthorized (401: {"error":"Unauthorized"})',
       )
 
@@ -1026,7 +1039,7 @@ describe("ApiClient", () => {
       vi.mocked(axios.isAxiosError).mockReturnValue(true)
       vi.mocked(mockAuthProvider.handleAuthError).mockRejectedValueOnce(authHandlerError)
 
-      await expect(authApiClient.executeApiCall("GET::users-list", {})).rejects.toThrow(
+      await expect(authApiClient.executeApiCall("GET::users__list", {})).rejects.toThrow(
         "Token expired. Please provide a new token.",
       )
 
@@ -1035,8 +1048,8 @@ describe("ApiClient", () => {
 
     it("should get fresh headers for each request", async () => {
       // Make multiple requests
-      await authApiClient.executeApiCall("GET::users-list", {})
-      await authApiClient.executeApiCall("GET::posts-list", {})
+      await authApiClient.executeApiCall("GET::users__list", {})
+      await authApiClient.executeApiCall("GET::posts__list", {})
 
       expect(mockAuthProvider.getAuthHeaders).toHaveBeenCalledTimes(2)
       expect(mockAxiosInstance).toHaveBeenCalledTimes(2)
@@ -1049,7 +1062,7 @@ describe("ApiClient", () => {
         "X-API-Key": "test-key",
       })
 
-      await clientWithHeaders.executeApiCall("GET::users-list", {})
+      await clientWithHeaders.executeApiCall("GET::users__list", {})
 
       expect(mockAxiosInstance).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1061,7 +1074,7 @@ describe("ApiClient", () => {
     it("should work with no auth provider or headers", async () => {
       const clientWithoutAuth = new ApiClient("https://api.example.com")
 
-      await clientWithoutAuth.executeApiCall("GET::users-list", {})
+      await clientWithoutAuth.executeApiCall("GET::users__list", {})
 
       expect(mockAxiosInstance).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -184,31 +184,34 @@ describe("ToolsManager", () => {
 
           // Complex nested paths - resource should be the last non-parameter segment
           [
-            "GET::api-v1-user-profile-settings",
-            { name: "getUserProfileSettings", resourceName: "settings" } as ExtendedTool,
+            "GET::api__v1__user__profile__settings",
+            { name: "userProfileSettings", resourceName: "settings" } as ExtendedTool,
           ],
           [
-            "POST::api-v2-organizations-id-members",
+            "POST::api__v2__organizations__id__members",
             { name: "addOrgMember", resourceName: "members" } as ExtendedTool,
           ],
           [
-            "PUT::service-users-authority-groups-id",
+            "PUT::service__users__authority__groups__id",
             { name: "updateAuthorityGroup", resourceName: "groups" } as ExtendedTool,
           ],
 
           // Paths with hyphens and underscores
           [
-            "GET::user_profile-data",
-            { name: "getUserProfileData", resourceName: "data" } as ExtendedTool,
+            "GET::user_profile__data",
+            { name: "userProfileData", resourceName: "data" } as ExtendedTool,
           ],
           [
-            "POST::api_v1-user-management",
+            "POST::api__v1__user__management",
             { name: "manageUser", resourceName: "management" } as ExtendedTool,
           ],
 
           // Edge cases
           ["GET::health", { name: "healthCheck", resourceName: "health" } as ExtendedTool],
-          ["GET::api-status-check", { name: "statusCheck", resourceName: "check" } as ExtendedTool],
+          [
+            "GET::api__status__check",
+            { name: "statusCheck", resourceName: "check" } as ExtendedTool,
+          ],
         ])
 
         mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
@@ -218,14 +221,14 @@ describe("ToolsManager", () => {
         // Test filtering by different resource names
         const testCases = [
           { filter: ["users"], expected: ["GET::users"] },
-          { filter: ["settings"], expected: ["GET::api-v1-user-profile-settings"] },
-          { filter: ["members"], expected: ["POST::api-v2-organizations-id-members"] },
-          { filter: ["groups"], expected: ["PUT::service-users-authority-groups-id"] },
-          { filter: ["data"], expected: ["GET::user_profile-data"] },
-          { filter: ["management"], expected: ["POST::api_v1-user-management"] },
+          { filter: ["settings"], expected: ["GET::api__v1__user__profile__settings"] },
+          { filter: ["members"], expected: ["POST::api__v2__organizations__id__members"] },
+          { filter: ["groups"], expected: ["PUT::service__users__authority__groups__id"] },
+          { filter: ["data"], expected: ["GET::user_profile__data"] },
+          { filter: ["management"], expected: ["POST::api__v1__user__management"] },
           { filter: ["health"], expected: ["GET::health"] },
-          { filter: ["check"], expected: ["GET::api-status-check"] },
-          { filter: ["users", "data"], expected: ["GET::users", "GET::user_profile-data"] },
+          { filter: ["check"], expected: ["GET::api__status__check"] },
+          { filter: ["users", "data"], expected: ["GET::users", "GET::user_profile__data"] },
         ]
 
         for (const testCase of testCases) {
@@ -247,17 +250,17 @@ describe("ToolsManager", () => {
       it("should handle resource names with special characters and case variations", async () => {
         const mockTools = new Map([
           [
-            "GET::api-user_profiles",
-            { name: "getUserProfiles", resourceName: "user_profiles" } as ExtendedTool,
+            "GET::api__user_profiles",
+            { name: "userProfiles", resourceName: "user_profiles" } as ExtendedTool,
           ],
-          ["GET::api-UserData", { name: "getUserData", resourceName: "UserData" } as ExtendedTool],
+          ["GET::api__UserData", { name: "getUserData", resourceName: "UserData" } as ExtendedTool],
           [
-            "GET::api-ADMIN_PANEL",
-            { name: "getAdminPanel", resourceName: "ADMIN_PANEL" } as ExtendedTool,
+            "GET::api__ADMIN_PANEL",
+            { name: "adminPanel", resourceName: "ADMIN_PANEL" } as ExtendedTool,
           ],
           [
-            "GET::api-kebab-case-resource",
-            { name: "getKebabResource", resourceName: "resource" } as ExtendedTool,
+            "GET::api__kebab-case-resource",
+            { name: "kebabResource", resourceName: "kebab-case-resource" } as ExtendedTool,
           ],
         ])
 
@@ -275,7 +278,7 @@ describe("ToolsManager", () => {
         const resultToolIds = Array.from((toolsManager as any).tools.keys())
         // Should match case-insensitively
         expect(resultToolIds.sort()).toEqual(
-          ["GET::api-user_profiles", "GET::api-UserData", "GET::api-ADMIN_PANEL"].sort(),
+          ["GET::api__user_profiles", "GET::api__UserData", "GET::api__ADMIN_PANEL"].sort(),
         )
       })
     })
@@ -769,7 +772,7 @@ describe("ToolsManager", () => {
 
   describe("parseToolId", () => {
     it("should parse a tool ID into method and path", () => {
-      const result = toolsManager.parseToolId("GET::users-active")
+      const result = toolsManager.parseToolId("GET::users__active")
       expect(result).toEqual({
         method: "GET",
         path: "/users/active",
@@ -777,15 +780,15 @@ describe("ToolsManager", () => {
     })
 
     it("should handle complex paths with hyphens", () => {
-      const result = toolsManager.parseToolId("POST::api-v1-user-profile-update")
+      const result = toolsManager.parseToolId("POST::api__v1__user-profile__update")
       expect(result).toEqual({
         method: "POST",
-        path: "/api/v1/user/profile/update",
+        path: "/api/v1/user-profile/update",
       })
     })
 
     it("should handle paths with underscores", () => {
-      const result = toolsManager.parseToolId("GET::user_profile-user_id")
+      const result = toolsManager.parseToolId("GET::user_profile__user_id")
       expect(result).toEqual({
         method: "GET",
         path: "/user_profile/user_id",
@@ -794,12 +797,12 @@ describe("ToolsManager", () => {
 
     it("should handle paths with special characters (encoded)", () => {
       const specialPath = "/user_profile/{user_id}/data-2024_06"
-      const pathPart = "user_profile-user_id-data-2024_06"
+      const pathPart = "user_profile__user_id__data-2024_06"
       const toolId = `GET::${pathPart}`
       const result = toolsManager.parseToolId(toolId)
       expect(result).toEqual({
         method: "GET",
-        path: "/user_profile/user_id/data/2024_06",
+        path: "/user_profile/user_id/data-2024_06",
       })
     })
 
@@ -812,37 +815,37 @@ describe("ToolsManager", () => {
       ]
       for (const path of paths) {
         const method = "GET"
-        // Simulate the toolId generation process
+        // Simulate the toolId generation process with new format
         const cleanPath = path
           .replace(/^\//, "")
           .replace(/\{([^}]+)\}/g, "$1")
-          .replace(/\//g, "-")
+          .replace(/\//g, "__") // Use double underscores now
         const toolId = `${method}::${cleanPath}`
         const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(toolId)
         expect(parsedMethod).toBe(method)
         // The parsed path should reconstruct the original API path structure
-        const expectedPath = "/" + cleanPath.replace(/-/g, "/")
+        const expectedPath = "/" + cleanPath.replace(/__/g, "/")
         expect(parsedPath).toBe(expectedPath)
       }
     })
 
     it("should handle legitimate hyphens in path segments correctly", () => {
-      // Test the enhanced hyphen handling with escaped hyphens
+      // Test the enhanced hyphen handling - now much simpler with double underscores
       const testCases = [
         {
-          toolId: "GET::api-resource--name-items",
+          toolId: "GET::api__resource-name__items",
           expected: { method: "GET", path: "/api/resource-name/items" },
         },
         {
-          toolId: "POST::user--profile-data",
+          toolId: "POST::user-profile__data",
           expected: { method: "POST", path: "/user-profile/data" },
         },
         {
-          toolId: "PUT::api-v1-user--management--system",
+          toolId: "PUT::api__v1__user-management-system",
           expected: { method: "PUT", path: "/api/v1/user-management-system" },
         },
         {
-          toolId: "DELETE::complex--path-with--multiple--hyphens",
+          toolId: "DELETE::complex-path__with-multiple-hyphens",
           expected: { method: "DELETE", path: "/complex-path/with-multiple-hyphens" },
         },
       ]
@@ -855,8 +858,7 @@ describe("ToolsManager", () => {
 
     it("REGRESSION: should resolve original toolId ambiguity issue with underscores and hyphens", () => {
       // This test validates that the original issue is resolved:
-      // Before the fix, paths with underscores and hyphens could be parsed incorrectly
-      // because the separator was ambiguous
+      // The new double underscore format eliminates all ambiguity
 
       const problematicPaths = [
         // Original problematic case: path with underscores and hyphens
@@ -876,7 +878,7 @@ describe("ToolsManager", () => {
         const cleanPath = originalPath
           .replace(/^\//, "") // Remove leading slash
           .replace(/\{([^}]+)\}/g, "$1") // Remove curly braces from path params
-          .replace(/\//g, "-") // Convert slashes to hyphens
+          .replace(/\//g, "__") // Convert slashes to double underscores
         const toolId = `${method}::${cleanPath}`
 
         // Step 2: Parse the toolId back (as done in tools-manager.ts and api-client.ts)
@@ -886,7 +888,7 @@ describe("ToolsManager", () => {
         expect(parsedMethod).toBe(method)
 
         // The parsed path should reconstruct the original API path structure
-        const expectedPath = "/" + cleanPath.replace(/-/g, "/")
+        const expectedPath = "/" + cleanPath.replace(/__/g, "/")
         expect(parsedPath).toBe(expectedPath)
 
         // Step 4: Validate that the toolId format is unambiguous
@@ -914,12 +916,13 @@ describe("ToolsManager", () => {
         // When parsing, it's ambiguous where the method ends and path begins
         // because both method separator and path parts use hyphens
 
-        // With the NEW format (using :: separator):
+        // With the NEW format (using :: separator and __ for paths):
         const method = "GET"
-        const cleanPath = path.replace(/^\//, "").replace(/\//g, "-")
+        const cleanPath = path.replace(/^\//, "").replace(/\//g, "__")
         const newFormatToolId = `${method}::${cleanPath}`
 
         // The new format is unambiguous because :: only appears once as separator
+        // and __ is used for path separators (extremely rare in real APIs)
         expect(newFormatToolId.split("::")).toHaveLength(2)
         expect(newFormatToolId.split("::")[0]).toBe(method)
         expect(newFormatToolId.split("::")[1]).toBe(cleanPath)
@@ -927,7 +930,7 @@ describe("ToolsManager", () => {
         // Parsing is now deterministic and reconstructs the original API path
         const { method: parsedMethod, path: parsedPath } = toolsManager.parseToolId(newFormatToolId)
         expect(parsedMethod).toBe(method)
-        expect(parsedPath).toBe("/" + cleanPath.replace(/-/g, "/"))
+        expect(parsedPath).toBe("/" + cleanPath.replace(/__/g, "/"))
 
         // The old format would have been: "GET-user_profile-data"
         // Which could be parsed as:
@@ -943,7 +946,7 @@ describe("ToolsManager", () => {
       // Verify that ToolsManager.parseToolId uses the same utility as ApiClient
       // This ensures consistency across modules
 
-      const testToolId = "GET::api-v1-users-id-profile"
+      const testToolId = "GET::api__v1__users__id__profile"
       const result = toolsManager.parseToolId(testToolId)
 
       // Test the utility directly to ensure consistency

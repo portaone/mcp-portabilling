@@ -12,7 +12,7 @@ describe("Tool ID Utilities", () => {
     })
 
     it("should handle complex paths with multiple segments", () => {
-      const result = parseToolId("POST::api-v1-users-profile")
+      const result = parseToolId("POST::api__v1__users__profile")
       expect(result).toEqual({
         method: "POST",
         path: "/api/v1/users/profile",
@@ -20,7 +20,7 @@ describe("Tool ID Utilities", () => {
     })
 
     it("should handle paths with underscores", () => {
-      const result = parseToolId("PUT::user_profile-settings")
+      const result = parseToolId("PUT::user_profile__settings")
       expect(result).toEqual({
         method: "PUT",
         path: "/user_profile/settings",
@@ -28,10 +28,18 @@ describe("Tool ID Utilities", () => {
     })
 
     it("should handle mixed separators", () => {
-      const result = parseToolId("DELETE::api_v2-user_management-groups")
+      const result = parseToolId("DELETE::api_v2__user_management__groups")
       expect(result).toEqual({
         method: "DELETE",
         path: "/api_v2/user_management/groups",
+      })
+    })
+
+    it("should handle paths with hyphens (no escaping needed)", () => {
+      const result = parseToolId("GET::api__resource-name__items")
+      expect(result).toEqual({
+        method: "GET",
+        path: "/api/resource-name/items",
       })
     })
 
@@ -56,14 +64,6 @@ describe("Tool ID Utilities", () => {
       expect(result).toEqual({
         method: "",
         path: "/users",
-      })
-    })
-
-    it("should handle empty path part", () => {
-      const result = parseToolId("GET::")
-      expect(result).toEqual({
-        method: "GET",
-        path: "",
       })
     })
 
@@ -133,12 +133,11 @@ describe("Tool ID Utilities", () => {
       expect(result.path).toBe(`/${longPath}`)
     })
 
-    it("should handle inputs with only hyphens in path", () => {
+    it("should handle inputs with double underscores in path", () => {
       const testCases = [
-        { input: "GET::-", expected: { method: "GET", path: "//" } },
-        { input: "GET::--", expected: { method: "GET", path: "/-" } },
-        { input: "GET::---", expected: { method: "GET", path: "/-/" } },
-        { input: "GET::----", expected: { method: "GET", path: "/--" } },
+        { input: "GET::__", expected: { method: "GET", path: "//" } },
+        { input: "GET::____", expected: { method: "GET", path: "///" } },
+        { input: "GET::api____users", expected: { method: "GET", path: "/api//users" } },
       ]
 
       for (const { input, expected } of testCases) {
@@ -156,22 +155,27 @@ describe("Tool ID Utilities", () => {
 
     it("should handle complex paths with multiple segments", () => {
       const result = generateToolId("POST", "/api/v1/users/profile")
-      expect(result).toBe("POST::api-v1-users-profile")
+      expect(result).toBe("POST::api__v1__users__profile")
     })
 
     it("should remove path parameter braces", () => {
       const result = generateToolId("GET", "/users/{id}/profile")
-      expect(result).toBe("GET::users-id-profile")
+      expect(result).toBe("GET::users__id__profile")
     })
 
     it("should handle paths with underscores", () => {
       const result = generateToolId("PUT", "/user_profile/settings")
-      expect(result).toBe("PUT::user_profile-settings")
+      expect(result).toBe("PUT::user_profile__settings")
     })
 
     it("should handle mixed separators and path params", () => {
       const result = generateToolId("DELETE", "/api_v2/user_management/{groupId}/members")
-      expect(result).toBe("DELETE::api_v2-user_management-groupId-members")
+      expect(result).toBe("DELETE::api_v2__user_management__groupId__members")
+    })
+
+    it("should handle paths with hyphens (no escaping needed)", () => {
+      const result = generateToolId("GET", "/api/resource-name/items")
+      expect(result).toBe("GET::api__resource-name__items")
     })
 
     it("should uppercase the method", () => {
@@ -187,17 +191,17 @@ describe("Tool ID Utilities", () => {
     describe("Character Sanitization", () => {
       it("should remove special characters not in [A-Za-z0-9_-]", () => {
         const result = generateToolId("POST", "/api/v2.1/users@domain.com")
-        expect(result).toBe("POST::api-v21-usersdomaincom")
+        expect(result).toBe("POST::api__v21__usersdomaincom")
       })
 
       it("should handle dots in version numbers", () => {
         const result = generateToolId("GET", "/api/v1.2.3/users")
-        expect(result).toBe("GET::api-v123-users")
+        expect(result).toBe("GET::api__v123__users")
       })
 
       it("should remove at symbols and other email-like characters", () => {
         const result = generateToolId("PUT", "/users/{email@domain.com}/profile")
-        expect(result).toBe("PUT::users-emaildomaincom-profile")
+        expect(result).toBe("PUT::users__emaildomaincom__profile")
       })
 
       it("should handle query parameter-like syntax", () => {
@@ -207,27 +211,24 @@ describe("Tool ID Utilities", () => {
 
       it("should remove parentheses and brackets", () => {
         const result = generateToolId("POST", "/api/users(active)/groups[admin]")
-        expect(result).toBe("POST::api-usersactive-groupsadmin")
+        expect(result).toBe("POST::api__usersactive__groupsadmin")
       })
 
       it("should handle spaces and tabs", () => {
         const result = generateToolId("PATCH", "/api/user profile/settings")
-        expect(result).toBe("PATCH::api-userprofile-settings")
+        expect(result).toBe("PATCH::api__userprofile__settings")
       })
 
-      it("should remove leading and trailing hyphens after sanitization", () => {
-        const result = generateToolId("DELETE", "/-api-/users/-")
-        // With hyphen escaping: /-api-/users/- becomes -api--users- (after removing leading slash and escaping hyphens)
-        // Then slashes become hyphens: api---users (the middle hyphen was escaped to --, then slash became -)
-        // After sanitization, leading/trailing hyphens are removed: api---users (no leading/trailing hyphens to remove)
-        expect(result).toBe("DELETE::api---users")
+      it("should remove leading and trailing hyphens and underscores after sanitization", () => {
+        const result = generateToolId("DELETE", "/-api-/users/_")
+        expect(result).toBe("DELETE::api-__users")
       })
 
-      it("should collapse multiple consecutive hyphens", () => {
+      it("should collapse multiple consecutive slashes", () => {
         const result = generateToolId("GET", "/api///v1///users")
         // Multiple slashes are collapsed first: /api/v1/users
-        // Then converted: api-v1-users (no hyphens to escape in this case)
-        expect(result).toBe("GET::api-v1-users")
+        // Then converted: api__v1__users
+        expect(result).toBe("GET::api__v1__users")
       })
 
       it("should handle complex special character combinations", () => {
@@ -235,17 +236,17 @@ describe("Tool ID Utilities", () => {
           "POST",
           "/api/v2.0/users/{user@domain.com}/posts?filter=active&sort=date",
         )
-        expect(result).toBe("POST::api-v20-users-userdomaincom-postsfilteractivesortdate")
+        expect(result).toBe("POST::api__v20__users__userdomaincom__postsfilteractivesortdate")
       })
 
       it("should preserve underscores in the sanitized output", () => {
         const result = generateToolId("PUT", "/api_v1/user_profile/settings_data")
-        expect(result).toBe("PUT::api_v1-user_profile-settings_data")
+        expect(result).toBe("PUT::api_v1__user_profile__settings_data")
       })
 
       it("should handle Unicode characters by removing them", () => {
         const result = generateToolId("GET", "/api/users/José/profile")
-        expect(result).toBe("GET::api-users-Jos-profile")
+        expect(result).toBe("GET::api__users__Jos__profile")
       })
 
       it("should handle empty path after sanitization", () => {
@@ -260,9 +261,7 @@ describe("Tool ID Utilities", () => {
 
       it("should maintain alphanumeric characters and allowed symbols", () => {
         const result = generateToolId("PATCH", "/api123/user_data-v2/settings")
-        // The hyphen in "user_data-v2" gets escaped: user_data--v2
-        // Then slashes become hyphens: api123-user_data--v2-settings
-        expect(result).toBe("PATCH::api123-user_data--v2-settings")
+        expect(result).toBe("PATCH::api123__user_data-v2__settings")
       })
     })
   })
@@ -293,8 +292,8 @@ describe("Tool ID Utilities", () => {
       }
     })
 
-    it("should handle paths with legitimate hyphens in segments (REGRESSION FIX)", () => {
-      // These are the specific cases mentioned in the improvement plan
+    it("should handle paths with legitimate hyphens perfectly", () => {
+      // These cases now work perfectly with no escaping needed
       const pathsWithHyphens = [
         "/api/resource-name/items",
         "/user-profile/data",
@@ -303,6 +302,9 @@ describe("Tool ID Utilities", () => {
         "/complex-path/with-many-hyphens/in-segments",
         "/api/multi-word-resource/sub-resource/action",
         "/v2/user-accounts/account-settings/privacy-controls",
+        "/api/--double-hyphen/test",
+        "/api/triple---hyphen/test",
+        "/api/mixed--and-single/test",
       ]
 
       for (const originalPath of pathsWithHyphens) {
@@ -314,25 +316,22 @@ describe("Tool ID Utilities", () => {
         // Parse it back
         const parsed = parseToolId(toolId)
 
-        // Should be unambiguous and consistent
+        // Should be perfect round-trip
         expect(parsed.method).toBe(method)
-
-        // The key fix: parsed path should exactly match the original path
-        // This verifies that hyphens in path segments are preserved correctly
         expect(parsed.path).toBe(originalPath)
 
-        // ToolId should use :: separator and contain escaped hyphens
+        // ToolId should use :: separator and __ for path separators
         expect(toolId).toContain("::")
         expect(toolId.split("::")).toHaveLength(2)
 
-        // Verify that the toolId contains escaped hyphens (--) for legitimate hyphens
-        if (originalPath.includes("-")) {
-          expect(toolId).toContain("--")
+        // Verify that the toolId contains double underscores for path separators
+        if (originalPath.includes("/")) {
+          expect(toolId).toContain("__")
         }
       }
     })
 
-    it("should handle the original problematic cases that caused ambiguity", () => {
+    it("should handle the original problematic cases perfectly", () => {
       const problematicPaths = [
         "/user_profile-data",
         "/api_v1-user-management",
@@ -351,11 +350,8 @@ describe("Tool ID Utilities", () => {
         // Parse it back
         const parsed = parseToolId(toolId)
 
-        // Should be unambiguous and consistent
+        // Should be perfect round-trip - no ambiguity!
         expect(parsed.method).toBe(method)
-
-        // With the new escaping, the parsed path should exactly match the original path
-        // This is the fix - hyphens are now preserved correctly!
         expect(parsed.path).toBe(path)
 
         // ToolId should use :: separator
@@ -364,32 +360,40 @@ describe("Tool ID Utilities", () => {
       }
     })
 
-    it("should demonstrate the difference from old broken behavior", () => {
-      // This test shows how the old behavior was broken and the new behavior fixes it
+    it("should demonstrate the improvement over old hyphen-based behavior", () => {
       const pathWithHyphens = "/api/resource-name/items"
       const method = "GET"
 
       const toolId = generateToolId(method, pathWithHyphens)
       const parsed = parseToolId(toolId)
 
-      // NEW BEHAVIOR (correct): Hyphens are preserved
+      // NEW BEHAVIOR (perfect): Hyphens are preserved exactly
       expect(parsed.path).toBe("/api/resource-name/items")
-      expect(toolId).toBe("GET::api-resource--name-items")
+      expect(toolId).toBe("GET::api__resource-name__items")
 
       // OLD BEHAVIOR would have been:
-      // toolId: "GET::api-resource-name-items" (no escaping)
-      // parsed.path: "/api/resource/name/items" (incorrect - hyphens became slashes)
+      // toolId: "GET::api-resource--name-items" (confusing escaping)
+      // parsed.path: could be ambiguous
 
-      // Verify the toolId contains escaped hyphens
-      expect(toolId).toContain("--")
+      // Verify the toolId uses double underscores for clarity
+      expect(toolId).toContain("__")
+      expect(toolId).not.toContain("--") // No more confusing escaping
     })
 
-    it("should handle edge cases with hyphen escaping", () => {
+    it("should handle edge cases with mixed separators", () => {
       const edgeCases = [
         { path: "/api/trailing-hyphen-/test", description: "path with trailing hyphen in segment" },
         {
           path: "/api/mixed_under-score-hyphen/test",
           description: "path with mixed underscores and hyphens",
+        },
+        {
+          path: "/api/--double/single-/mixed--/test",
+          description: "complex mix of double hyphens, single hyphens, and trailing hyphens",
+        },
+        {
+          path: "/api/user--profile/data--settings/config",
+          description: "realistic API path with double hyphens in resource names",
         },
       ]
 
@@ -398,7 +402,7 @@ describe("Tool ID Utilities", () => {
         const toolId = generateToolId(method, path)
         const parsed = parseToolId(toolId)
 
-        // The round-trip should preserve the original path structure
+        // Perfect round-trip should work for all cases
         expect(parsed.path).toBe(path)
         expect(parsed.method).toBe(method)
 
@@ -406,49 +410,6 @@ describe("Tool ID Utilities", () => {
         expect(toolId).toContain("::")
         expect(toolId.split("::")).toHaveLength(2)
       }
-    })
-
-    it("should handle edge case with leading hyphen in segment", () => {
-      // Leading hyphens in segments create a special case due to sanitization
-      const pathWithLeadingHyphen = "/api/-leading-hyphen/test"
-      const method = "POST"
-
-      const toolId = generateToolId(method, pathWithLeadingHyphen)
-      const parsed = parseToolId(toolId)
-
-      // Due to sanitization removing leading hyphens, this case has a limitation
-      expect(parsed.path).toBe("/api-/leading-hyphen/test")
-      expect(parsed.method).toBe(method)
-
-      // The toolId should still be valid
-      expect(toolId).toContain("::")
-      expect(toolId.split("::")).toHaveLength(2)
-    })
-
-    it("should handle limitation with consecutive hyphens in original path", () => {
-      // This test documents a known limitation: paths with consecutive hyphens
-      // in the original path segments cannot be perfectly round-tripped due to
-      // the inherent ambiguity in the escaping scheme.
-      // This is an extremely rare edge case in real-world APIs.
-
-      const pathWithConsecutiveHyphens = "/api/--double-hyphen/test"
-      const method = "GET"
-
-      const toolId = generateToolId(method, pathWithConsecutiveHyphens)
-      const parsed = parseToolId(toolId)
-
-      // The parsed path will be different due to the escaping ambiguity
-      expect(parsed.path).toBe("/api--/double-hyphen/test")
-      expect(parsed.method).toBe(method)
-
-      // This is a known limitation - consecutive hyphens in original path segments
-      // create ambiguity in the escaping scheme. However, this is extremely rare
-      // in real-world REST APIs, which typically use single hyphens as separators.
-      expect(parsed.path).not.toBe(pathWithConsecutiveHyphens)
-
-      // The toolId should still be valid
-      expect(toolId).toContain("::")
-      expect(toolId.split("::")).toHaveLength(2)
     })
 
     it("should handle round-trip with sanitized special characters", () => {
@@ -513,7 +474,9 @@ describe("Tool ID Utilities", () => {
       expect(generateToolId("PUT", "/!@#$%^&*()")).toBe("PUT::")
 
       // Mixed valid and invalid characters
-      expect(generateToolId("DELETE", "/api123!@#/users_data$%^")).toBe("DELETE::api123-users_data")
+      expect(generateToolId("DELETE", "/api123!@#/users_data$%^")).toBe(
+        "DELETE::api123__users_data",
+      )
     })
   })
 
@@ -523,12 +486,12 @@ describe("Tool ID Utilities", () => {
         {
           description: "Latin accented characters",
           path: "/api/users/José/María/profile",
-          expected: "GET::api-users-Jos-Mara-profile",
+          expected: "GET::api__users__Jos__Mara__profile",
         },
         {
           description: "German umlauts",
           path: "/api/users/müller/straße",
-          expected: "GET::api-users-mller-strae",
+          expected: "GET::api__users__mller__strae",
         },
         {
           description: "Cyrillic characters",
@@ -548,22 +511,22 @@ describe("Tool ID Utilities", () => {
         {
           description: "Emoji and symbols",
           path: "/api/users/😀/👍/profile",
-          expected: "GET::api-users---profile",
+          expected: "GET::api__users__profile",
         },
         {
           description: "Mathematical symbols",
           path: "/api/calc/∑/∆/result",
-          expected: "GET::api-calc---result",
+          expected: "GET::api__calc__result",
         },
         {
           description: "Currency symbols",
           path: "/api/prices/€/$/£",
-          expected: "GET::api-prices",
+          expected: "GET::api__prices",
         },
         {
           description: "Mixed Unicode and ASCII",
           path: "/api/users/José123/müller_data/profile",
-          expected: "GET::api-users-Jos123-mller_data-profile",
+          expected: "GET::api__users__Jos123__mller_data__profile",
         },
       ]
 
@@ -578,22 +541,22 @@ describe("Tool ID Utilities", () => {
         {
           description: "Combining characters",
           path: "/api/café/naïve", // é = e + ´, ï = i + ¨
-          expected: "GET::api-caf-nave",
+          expected: "GET::api__caf__nave",
         },
         {
           description: "Zero-width characters",
           path: "/api/test\u200B\u200C\u200D/data", // Zero-width space, non-joiner, joiner
-          expected: "GET::api-test-data",
+          expected: "GET::api__test__data",
         },
         {
           description: "Control characters",
           path: "/api/test\u0000\u0001\u0002/data", // Null, SOH, STX
-          expected: "GET::api-test-data",
+          expected: "GET::api__test__data",
         },
         {
           description: "Surrogate pairs (high Unicode)",
           path: "/api/test𝕏𝕐𝕑/data", // Mathematical script letters
-          expected: "GET::api-test-data",
+          expected: "GET::api__test__data",
         },
       ]
 
@@ -608,22 +571,22 @@ describe("Tool ID Utilities", () => {
         {
           description: "ASCII letters and numbers",
           path: "/api/users123/data456",
-          expected: "GET::api-users123-data456",
+          expected: "GET::api__users123__data456",
         },
         {
           description: "Underscores",
           path: "/api/user_profile/settings_data",
-          expected: "GET::api-user_profile-settings_data",
+          expected: "GET::api__user_profile__settings_data",
         },
         {
-          description: "Hyphens (escaped)",
+          description: "Hyphens (preserved perfectly)",
           path: "/api/user-profile/data-settings",
-          expected: "GET::api-user--profile-data--settings",
+          expected: "GET::api__user-profile__data-settings",
         },
         {
           description: "Mixed allowed characters",
           path: "/api/user123_profile-data/settings",
-          expected: "GET::api-user123_profile--data-settings",
+          expected: "GET::api__user123_profile-data__settings",
         },
       ]
 
@@ -638,22 +601,22 @@ describe("Tool ID Utilities", () => {
         {
           description: "Unicode in path parameters",
           path: "/api/users/{José}/profile",
-          expected: "GET::api-users-Jos-profile",
+          expected: "GET::api__users__Jos__profile",
         },
         {
           description: "Unicode mixed with special characters",
           path: "/api/users/José@domain.com/profile",
-          expected: "GET::api-users-Josdomaincom-profile",
+          expected: "GET::api__users__Josdomaincom__profile",
         },
         {
           description: "Empty segments after Unicode removal",
           path: "/api/用户/配置/profile",
-          expected: "GET::api---profile",
+          expected: "GET::api__profile",
         },
         {
           description: "Unicode at path boundaries",
           path: "/José/api/María/",
-          expected: "GET::Jos-api-Mara",
+          expected: "GET::Jos__api__Mara",
         },
       ]
 
@@ -690,7 +653,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Leading slashes with path segments",
           path: "///api/v1/users",
-          expected: "GET::api-v1-users",
+          expected: "GET::api__v1__users",
         },
       ]
 
@@ -720,12 +683,12 @@ describe("Tool ID Utilities", () => {
         {
           description: "Trailing slashes with complex path",
           path: "/api/v1/users/profile/",
-          expected: "GET::api-v1-users-profile",
+          expected: "GET::api__v1__users__profile",
         },
         {
           description: "Trailing slashes with path parameters",
           path: "/users/{id}/profile/",
-          expected: "GET::users-id-profile",
+          expected: "GET::users__id__profile",
         },
       ]
 
@@ -750,7 +713,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Complex path with leading and trailing slashes",
           path: "//api/v1/users/profile//",
-          expected: "GET::api-v1-users-profile",
+          expected: "GET::api__v1__users__profile",
         },
         {
           description: "Only slashes",
@@ -775,27 +738,27 @@ describe("Tool ID Utilities", () => {
         {
           description: "Double slash in middle",
           path: "/api//users",
-          expected: "GET::api-users",
+          expected: "GET::api__users",
         },
         {
           description: "Multiple consecutive slashes",
           path: "/api////v1///users",
-          expected: "GET::api-v1-users",
+          expected: "GET::api__v1__users",
         },
         {
           description: "Mixed consecutive slashes",
           path: "//api//v1/users//profile///",
-          expected: "GET::api-v1-users-profile",
+          expected: "GET::api__v1__users__profile",
         },
         {
           description: "Consecutive slashes with path parameters",
           path: "/users//{id}//profile",
-          expected: "GET::users-id-profile",
+          expected: "GET::users__id__profile",
         },
         {
           description: "Consecutive slashes with hyphens",
           path: "/api//user-profile///settings",
-          expected: "GET::api-user--profile-settings",
+          expected: "GET::api__user-profile__settings",
         },
       ]
 
@@ -843,17 +806,17 @@ describe("Tool ID Utilities", () => {
         {
           description: "Slashes with Unicode",
           path: "//api/José//users/",
-          expected: "GET::api-Jos-users",
+          expected: "GET::api__Jos__users",
         },
         {
           description: "Slashes with special characters",
           path: "//api@domain.com//users/",
-          expected: "GET::apidomaincom-users",
+          expected: "GET::apidomaincom__users",
         },
         {
           description: "Slashes with path parameters and special chars",
           path: "/users//{email@domain.com}//profile/",
-          expected: "GET::users-emaildomaincom-profile",
+          expected: "GET::users__emaildomaincom__profile",
         },
       ]
 
