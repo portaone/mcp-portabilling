@@ -3,7 +3,8 @@ import { readFile } from "fs/promises"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
 import crypto from "crypto"
-import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
+import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./utils/abbreviations.js"
+import { generateToolId } from "./utils/tool-id.js"
 
 /**
  * Spec input method type
@@ -278,10 +279,9 @@ export class OpenAPISpecLoader {
         }
 
         const op = operation as OpenAPIV3.OperationObject
-        const cleanPath = path.replace(/^\//, "").replace(/\{([^}]+)\}/g, "$1")
-        const toolId = `${method.toUpperCase()}-${cleanPath}`.replace(/[^a-zA-Z0-9-]/g, "-")
+        const toolId = generateToolId(method, path)
 
-        let nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
+        const nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)
 
         const tool: Tool = {
@@ -292,6 +292,9 @@ export class OpenAPISpecLoader {
             properties: {},
           },
         }
+
+        // Store the original path for API client use
+        ;(tool as any)["x-original-path"] = path
 
         // Gather all required property names
         const requiredParams: string[] = []

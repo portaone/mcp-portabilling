@@ -237,6 +237,7 @@ paths:
       })
 
       // Set up the stdin mock to simulate data flow
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       mockStdin.on.mockImplementation((event: string, callback: Function) => {
         if (event === "data") {
           setTimeout(() => callback(stdinContent), 0)
@@ -302,6 +303,7 @@ paths:
         configurable: true,
       })
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       mockStdin.on.mockImplementation((event: string, callback: Function) => {
         if (event === "end") {
           setTimeout(() => callback(), 0)
@@ -376,7 +378,7 @@ paths:
       const toolId = Array.from(tools.keys())[0]
 
       // Should not be abbreviated
-      expect(toolId).toContain("GET-users-management-authorization-groups")
+      expect(toolId).toContain("GET::users-management-authorization-groups")
       const tool = tools.get(toolId)!
       expect(tool.name).toContain("get-user-management-authorization-groups")
     })
@@ -387,14 +389,14 @@ paths:
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
 
       expect(tools.size).toBe(3)
-      expect(tools.has("GET-users")).toBe(true)
-      expect(tools.has("POST-users")).toBe(true)
-      expect(tools.has("GET-users-id")).toBe(true)
+      expect(tools.has("GET::users")).toBe(true)
+      expect(tools.has("POST::users")).toBe(true)
+      expect(tools.has("GET::users-id")).toBe(true)
     })
 
     it("should set correct tool properties", () => {
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
-      const getUsersTool = tools.get("GET-users") as Tool
+      const getUsersTool = tools.get("GET::users") as Tool
 
       expect(getUsersTool).toBeDefined()
       expect(getUsersTool.name).toBe("get-usrs")
@@ -413,7 +415,7 @@ paths:
 
     it("should handle required parameters", () => {
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
-      const getUserByIdTool = tools.get("GET-users-id") as Tool
+      const getUserByIdTool = tools.get("GET::users-id") as Tool
 
       expect(getUserByIdTool).toBeDefined()
       expect(getUserByIdTool.inputSchema).toEqual({
@@ -431,7 +433,7 @@ paths:
 
     it("should use operationId as tool name when available", () => {
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
-      const getUsersTool = tools.get("GET-users") as Tool
+      const getUsersTool = tools.get("GET::users") as Tool
 
       expect(getUsersTool.name).toBe("get-usrs")
     })
@@ -450,7 +452,7 @@ paths:
       }
 
       const tools = openAPILoader.parseOpenAPISpec(specWithSpecialChars)
-      expect(tools.has("GET-api-v1-user-profiles")).toBe(true)
+      expect(tools.has("GET::api-v1-user-profiles")).toBe(true)
     })
 
     it("should handle empty paths object", () => {
@@ -487,7 +489,7 @@ paths:
 
       const tools = openAPILoader.parseOpenAPISpec(specWithPathParams)
       expect(tools.size).toBe(1)
-      expect(tools.has("GET-users")).toBe(true)
+      expect(tools.has("GET::users")).toBe(true)
     })
 
     it("should skip non-HTTP methods in path item", () => {
@@ -515,8 +517,8 @@ paths:
 
       const tools = openAPILoader.parseOpenAPISpec(specWithNonHttpMethods)
       expect(tools.size).toBe(2)
-      expect(tools.has("GET-api-users")).toBe(true)
-      expect(tools.has("POST-api-users")).toBe(true)
+      expect(tools.has("GET::api-users")).toBe(true)
+      expect(tools.has("POST::api-users")).toBe(true)
       // Verify non-HTTP methods aren't included
       expect([...tools.keys()].some((key) => key.startsWith("SERVERS-"))).toBe(false)
       expect([...tools.keys()].some((key) => key.startsWith("SUMMARY-"))).toBe(false)
@@ -540,7 +542,7 @@ paths:
         },
       }
       const tools = openAPILoader.parseOpenAPISpec(spec)
-      const tool = tools.get("POST-echo")!
+      const tool = tools.get("POST::echo")!
       expect(tool.inputSchema.properties).toHaveProperty("body")
       expect((tool.inputSchema.properties! as any).body.type).toBe("string")
       expect(tool.inputSchema.required).toEqual(["body"])
@@ -571,7 +573,7 @@ paths:
         },
       }
       const tools = openAPILoader.parseOpenAPISpec(spec)
-      const tool = tools.get("POST-create")!
+      const tool = tools.get("POST::create")!
       expect(tool.inputSchema.properties).toHaveProperty("foo")
       expect(tool.inputSchema.properties).toHaveProperty("bar")
       expect(tool.inputSchema.required).toEqual(["foo"])
@@ -596,7 +598,7 @@ paths:
         },
       }
       const tools = openAPILoader.parseOpenAPISpec(spec)
-      const tool = tools.get("POST-list")!
+      const tool = tools.get("POST::list")!
       expect(tool.inputSchema.properties).toHaveProperty("body")
       expect((tool.inputSchema.properties! as any).body.type).toBe("array")
       expect(tool.inputSchema.required).toEqual(["body"])
@@ -628,7 +630,7 @@ paths:
         },
       }
       const tools = openAPILoader.parseOpenAPISpec(spec)
-      const tool = tools.get("POST-items-id")!
+      const tool = tools.get("POST::items-id")!
       // Path param 'id' and body properties
       expect(tool.inputSchema.properties).toHaveProperty("id")
       expect(tool.inputSchema.properties).toHaveProperty("value")
@@ -667,7 +669,7 @@ paths:
         },
       }
       const tools = openAPILoader.parseOpenAPISpec(spec)
-      const tool = tools.get("POST-person")!
+      const tool = tools.get("POST::person")!
       expect(tool.inputSchema.properties).toHaveProperty("name")
       expect(tool.inputSchema.properties).toHaveProperty("friend")
       // friend nested should be empty object due to recursion
@@ -713,7 +715,7 @@ paths:
       const tools = openAPILoader.parseOpenAPISpec(specWithRefParams)
       expect(tools.size).toBe(1)
 
-      const tool = tools.get("GET-items-id")
+      const tool = tools.get("GET::items-id")
       expect(tool).toBeDefined()
 
       // Check that both referenced parameters were properly resolved
@@ -795,7 +797,7 @@ paths:
       const tools = openAPILoader.parseOpenAPISpec(specWithNestedRefs)
       expect(tools.size).toBe(1)
 
-      const tool = tools.get("GET-products")
+      const tool = tools.get("GET::products")
       expect(tool).toBeDefined()
 
       // Check that both referenced parameters were properly resolved
@@ -834,6 +836,82 @@ paths:
       const required = tool!.inputSchema.required
       expect(required).toBeUndefined()
     })
+
+    it("REGRESSION: should generate unambiguous toolIds for paths with underscores and hyphens", () => {
+      // This test validates that the original toolId ambiguity issue is resolved
+      // by ensuring the OpenAPI loader generates unambiguous toolIds
+
+      const specWithProblematicPaths: OpenAPIV3.Document = {
+        openapi: "3.0.0",
+        info: { title: "Test API", version: "1.0.0" },
+        paths: {
+          "/user_profile-data": {
+            get: {
+              operationId: "getUserProfileData",
+              summary: "Get user profile data",
+              responses: {},
+            },
+          },
+          "/api_v1-user-management": {
+            post: {
+              operationId: "createUserManagement",
+              summary: "Create user management",
+              responses: {},
+            },
+          },
+          "/service_users-authority_groups": {
+            put: {
+              operationId: "updateServiceUsersAuthorityGroups",
+              summary: "Update service users authority groups",
+              responses: {},
+            },
+          },
+          "/user-profile_data": {
+            delete: {
+              operationId: "deleteUserProfileData",
+              summary: "Delete user profile data",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithProblematicPaths)
+
+      // Validate that all expected toolIds are generated with :: separator
+      const expectedToolIds = [
+        "GET::user_profile-data",
+        "POST::api_v1-user-management",
+        "PUT::service_users-authority_groups",
+        "DELETE::user-profile_data",
+      ]
+
+      for (const expectedToolId of expectedToolIds) {
+        expect(tools.has(expectedToolId)).toBe(true)
+
+        // Validate the toolId format is unambiguous
+        expect(expectedToolId).toContain("::")
+        expect(expectedToolId.split("::")).toHaveLength(2)
+
+        const [method, pathPart] = expectedToolId.split("::")
+        expect(method).toMatch(/^(GET|POST|PUT|DELETE)$/)
+        expect(pathPart).toBeTruthy()
+        expect(pathPart).not.toContain("::") // Ensure no double separators
+      }
+
+      // Validate that the tools are correctly created
+      const getUserProfileDataTool = tools.get("GET::user_profile-data")!
+      expect(getUserProfileDataTool).toBeDefined()
+      // Just verify the tool exists and has a reasonable name, don't check exact abbreviation
+      expect(getUserProfileDataTool.name).toBeTruthy()
+      expect(getUserProfileDataTool.name.length).toBeGreaterThan(0)
+
+      const createUserManagementTool = tools.get("POST::api_v1-user-management")!
+      expect(createUserManagementTool).toBeDefined()
+      // Just verify the tool exists and has a reasonable name, don't check exact abbreviation
+      expect(createUserManagementTool.name).toBeTruthy()
+      expect(createUserManagementTool.name.length).toBeGreaterThan(0)
+    })
   })
 
   describe("disableAbbreviation", () => {
@@ -851,7 +929,7 @@ paths:
   describe("abbreviateOperationId", () => {
     const maxLength = 64
     // Helper to check length and character validity
-    const isValidToolName = (name: string) => {
+    const isValidToolName = (name: string): void => {
       expect(name.length).toBeLessThanOrEqual(maxLength)
       expect(name).toMatch(/^[a-z0-9-]+$/)
       expect(name).not.toMatch(/--/)

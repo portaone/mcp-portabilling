@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
+import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
 
 /**
  * Client for making API calls to the backend service
@@ -178,16 +179,12 @@ export class ApiClient {
 
         // Check if it's an authentication error and we haven't already retried
         if (!isRetry && isAuthError(axiosError)) {
-          try {
-            const shouldRetry = await this.authProvider.handleAuthError(axiosError)
-            if (shouldRetry) {
-              // Retry the request once
-              return this.executeApiCallWithRetry(toolId, params, true)
-            }
-          } catch (authHandlerError) {
-            // If auth handler throws, use that error instead
-            throw authHandlerError
+          const shouldRetry = await this.authProvider.handleAuthError(axiosError)
+          if (shouldRetry) {
+            // Retry the request once
+            return this.executeApiCallWithRetry(toolId, params, true)
           }
+          // If auth handler throws, use that error instead
         }
 
         throw new Error(
@@ -209,13 +206,11 @@ export class ApiClient {
   /**
    * Parse a tool ID into HTTP method and path
    *
-   * @param toolId - Tool ID in format METHOD-path-parts
+   * @param toolId - Tool ID in format METHOD::pathPart
    * @returns Object containing method and path
    */
   private parseToolId(toolId: string): { method: string; path: string } {
-    const [method, ...pathParts] = toolId.split("-")
-    const path = "/" + pathParts.join("/").replace(/-/g, "/")
-    return { method, path }
+    return parseToolIdUtil(toolId)
   }
 
   /**
