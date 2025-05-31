@@ -563,4 +563,417 @@ describe("loadConfig", () => {
       "Only one OpenAPI spec input method can be specified at a time",
     )
   })
+
+  describe("Array Options Handling", () => {
+    it("should handle array options for tools, tags, resources, and operations", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tool: ["tool1", "tool2", "tool3"],
+            tag: ["auth", "users"],
+            resource: ["api/v1/users", "api/v1/posts"],
+            operation: ["get", "post", "put"],
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+
+      const config = loadConfig()
+      expect(config.includeTools).toEqual(["tool1", "tool2", "tool3"])
+      expect(config.includeTags).toEqual(["auth", "users"])
+      expect(config.includeResources).toEqual(["api/v1/users", "api/v1/posts"])
+      expect(config.includeOperations).toEqual(["get", "post", "put"])
+    })
+
+    it("should handle single values for array options", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tool: ["single-tool"],
+            tag: ["single-tag"],
+            resource: ["single-resource"],
+            operation: ["get"],
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+
+      const config = loadConfig()
+      expect(config.includeTools).toEqual(["single-tool"])
+      expect(config.includeTags).toEqual(["single-tag"])
+      expect(config.includeResources).toEqual(["single-resource"])
+      expect(config.includeOperations).toEqual(["get"])
+    })
+
+    it("should handle empty arrays for array options", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tool: [],
+            tag: [],
+            resource: [],
+            operation: [],
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+
+      const config = loadConfig()
+      expect(config.includeTools).toEqual([])
+      expect(config.includeTags).toEqual([])
+      expect(config.includeResources).toEqual([])
+      expect(config.includeOperations).toEqual([])
+    })
+
+    it("should handle undefined array options", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            // No array options provided
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+
+      const config = loadConfig()
+      expect(config.includeTools).toBeUndefined()
+      expect(config.includeTags).toBeUndefined()
+      expect(config.includeResources).toBeUndefined()
+      expect(config.includeOperations).toBeUndefined()
+    })
+  })
+
+  describe("Enum Validation", () => {
+    it("should handle valid transportType choices", async () => {
+      // Test stdio
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            transport: "stdio",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      let { loadConfig } = await import("../src/config")
+      let config = loadConfig()
+      expect(config.transportType).toBe("stdio")
+
+      // Reset and test http
+      vi.resetModules()
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            transport: "http",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const configModule = await import("../src/config")
+      loadConfig = configModule.loadConfig
+      config = loadConfig()
+      expect(config.transportType).toBe("http")
+    })
+
+    it("should handle valid toolsMode choices", async () => {
+      // Test all
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tools: "all",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      let { loadConfig } = await import("../src/config")
+      let config = loadConfig()
+      expect(config.toolsMode).toBe("all")
+
+      // Reset and test dynamic
+      vi.resetModules()
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tools: "dynamic",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      let configModule = await import("../src/config")
+      loadConfig = configModule.loadConfig
+      config = loadConfig()
+      expect(config.toolsMode).toBe("dynamic")
+
+      // Reset and test explicit
+      vi.resetModules()
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            tools: "explicit",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      configModule = await import("../src/config")
+      loadConfig = configModule.loadConfig
+      config = loadConfig()
+      expect(config.toolsMode).toBe("explicit")
+    })
+
+    it("should handle toolsMode from environment variable", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      process.env.TOOLS_MODE = "dynamic"
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+      expect(config.toolsMode).toBe("dynamic")
+    })
+
+    it("should default to 'all' for toolsMode when not specified", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+      expect(config.toolsMode).toBe("all")
+    })
+
+    it("should handle transportType from environment variable", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      process.env.TRANSPORT_TYPE = "http"
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+      expect(config.transportType).toBe("http")
+    })
+
+    it("should default to 'stdio' for transportType when not specified", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+      expect(config.transportType).toBe("stdio")
+    })
+
+    // Note: Testing invalid enum values would require testing yargs validation directly,
+    // which would happen at the yargs level before our code runs. Since we're mocking
+    // yargs, we can't test the actual validation behavior. In a real scenario, yargs
+    // would throw an error for invalid choices before loadConfig() is called.
+    // The validation is handled by yargs' .choices() method in the actual implementation.
+  })
+
+  describe("HTTP Configuration", () => {
+    it("should handle HTTP transport configuration", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            transport: "http",
+            port: 8080,
+            host: "0.0.0.0",
+            path: "/custom-mcp",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+
+      expect(config.transportType).toBe("http")
+      expect(config.httpPort).toBe(8080)
+      expect(config.httpHost).toBe("0.0.0.0")
+      expect(config.endpointPath).toBe("/custom-mcp")
+    })
+
+    it("should use default HTTP configuration values", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+            transport: "http",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+
+      expect(config.transportType).toBe("http")
+      expect(config.httpPort).toBe(3000)
+      expect(config.httpHost).toBe("127.0.0.1")
+      expect(config.endpointPath).toBe("/mcp")
+    })
+
+    it("should handle HTTP configuration from environment variables", async () => {
+      vi.doMock("yargs", () => ({
+        default: vi.fn().mockReturnValue({
+          option: vi.fn().mockReturnThis(),
+          help: vi.fn().mockReturnThis(),
+          parseSync: vi.fn().mockReturnValue({
+            "api-base-url": "https://api.example.com",
+            "openapi-spec": "./spec.json",
+          }),
+        }),
+      }))
+
+      vi.doMock("yargs/helpers", () => ({
+        hideBin: vi.fn((arr) => arr),
+      }))
+
+      process.env.TRANSPORT_TYPE = "http"
+      process.env.HTTP_PORT = "9000"
+      process.env.HTTP_HOST = "localhost"
+      process.env.ENDPOINT_PATH = "/api/mcp"
+
+      const { loadConfig } = await import("../src/config")
+      const config = loadConfig()
+
+      expect(config.transportType).toBe("http")
+      expect(config.httpPort).toBe(9000)
+      expect(config.httpHost).toBe("localhost")
+      expect(config.endpointPath).toBe("/api/mcp")
+    })
+  })
 })
