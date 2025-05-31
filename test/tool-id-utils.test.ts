@@ -42,6 +42,110 @@ describe("Tool ID Utilities", () => {
         path: "",
       })
     })
+
+    it("should handle multiple :: separators", () => {
+      const result = parseToolId("GET::users::profile")
+      expect(result).toEqual({
+        method: "GET",
+        path: "/users",
+      })
+    })
+
+    it("should handle empty method", () => {
+      const result = parseToolId("::users")
+      expect(result).toEqual({
+        method: "",
+        path: "/users",
+      })
+    })
+
+    it("should handle empty path part", () => {
+      const result = parseToolId("GET::")
+      expect(result).toEqual({
+        method: "GET",
+        path: "",
+      })
+    })
+
+    it("should handle completely empty input", () => {
+      const result = parseToolId("")
+      expect(result).toEqual({
+        method: "",
+        path: "",
+      })
+    })
+
+    it("should handle only :: separator", () => {
+      const result = parseToolId("::")
+      expect(result).toEqual({
+        method: "",
+        path: "",
+      })
+    })
+
+    it("should handle method with different cases", () => {
+      const testCases = [
+        { input: "get::users", expected: { method: "get", path: "/users" } },
+        { input: "Post::users", expected: { method: "Post", path: "/users" } },
+        { input: "PUT::users", expected: { method: "PUT", path: "/users" } },
+        { input: "dElEtE::users", expected: { method: "dElEtE", path: "/users" } },
+      ]
+
+      for (const { input, expected } of testCases) {
+        const result = parseToolId(input)
+        expect(result).toEqual(expected)
+      }
+    })
+
+    it("should handle whitespace in method and path", () => {
+      const testCases = [
+        { input: " GET ::users", expected: { method: " GET ", path: "/users" } },
+        { input: "GET:: users ", expected: { method: "GET", path: "/ users " } },
+        { input: " GET :: users ", expected: { method: " GET ", path: "/ users " } },
+      ]
+
+      for (const { input, expected } of testCases) {
+        const result = parseToolId(input)
+        expect(result).toEqual(expected)
+      }
+    })
+
+    it("should handle special characters in method", () => {
+      const testCases = [
+        { input: "GET@::users", expected: { method: "GET@", path: "/users" } },
+        { input: "G-E-T::users", expected: { method: "G-E-T", path: "/users" } },
+        { input: "123::users", expected: { method: "123", path: "/users" } },
+      ]
+
+      for (const { input, expected } of testCases) {
+        const result = parseToolId(input)
+        expect(result).toEqual(expected)
+      }
+    })
+
+    it("should handle very long inputs", () => {
+      const longMethod = "A".repeat(1000)
+      const longPath = "b".repeat(1000)
+      const input = `${longMethod}::${longPath}`
+
+      const result = parseToolId(input)
+      expect(result.method).toBe(longMethod)
+      expect(result.path).toBe(`/${longPath}`)
+    })
+
+    it("should handle inputs with only hyphens in path", () => {
+      const testCases = [
+        { input: "GET::-", expected: { method: "GET", path: "//" } },
+        { input: "GET::--", expected: { method: "GET", path: "/-" } },
+        { input: "GET::---", expected: { method: "GET", path: "/-/" } },
+        { input: "GET::----", expected: { method: "GET", path: "/--" } },
+      ]
+
+      for (const { input, expected } of testCases) {
+        const result = parseToolId(input)
+        expect(result).toEqual(expected)
+      }
+    })
   })
 
   describe("generateToolId", () => {
@@ -410,6 +514,353 @@ describe("Tool ID Utilities", () => {
 
       // Mixed valid and invalid characters
       expect(generateToolId("DELETE", "/api123!@#/users_data$%^")).toBe("DELETE::api123-users_data")
+    })
+  })
+
+  describe("Enhanced Unicode Character Handling", () => {
+    it("should remove various Unicode categories", () => {
+      const testCases = [
+        {
+          description: "Latin accented characters",
+          path: "/api/users/José/María/profile",
+          expected: "GET::api-users-Jos-Mara-profile",
+        },
+        {
+          description: "German umlauts",
+          path: "/api/users/müller/straße",
+          expected: "GET::api-users-mller-strae",
+        },
+        {
+          description: "Cyrillic characters",
+          path: "/api/пользователи/профиль",
+          expected: "GET::api",
+        },
+        {
+          description: "Chinese characters",
+          path: "/api/用户/配置文件",
+          expected: "GET::api",
+        },
+        {
+          description: "Arabic characters",
+          path: "/api/المستخدمين/الملف",
+          expected: "GET::api",
+        },
+        {
+          description: "Emoji and symbols",
+          path: "/api/users/😀/👍/profile",
+          expected: "GET::api-users---profile",
+        },
+        {
+          description: "Mathematical symbols",
+          path: "/api/calc/∑/∆/result",
+          expected: "GET::api-calc---result",
+        },
+        {
+          description: "Currency symbols",
+          path: "/api/prices/€/$/£",
+          expected: "GET::api-prices",
+        },
+        {
+          description: "Mixed Unicode and ASCII",
+          path: "/api/users/José123/müller_data/profile",
+          expected: "GET::api-users-Jos123-mller_data-profile",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should handle Unicode normalization edge cases", () => {
+      const testCases = [
+        {
+          description: "Combining characters",
+          path: "/api/café/naïve", // é = e + ´, ï = i + ¨
+          expected: "GET::api-caf-nave",
+        },
+        {
+          description: "Zero-width characters",
+          path: "/api/test\u200B\u200C\u200D/data", // Zero-width space, non-joiner, joiner
+          expected: "GET::api-test-data",
+        },
+        {
+          description: "Control characters",
+          path: "/api/test\u0000\u0001\u0002/data", // Null, SOH, STX
+          expected: "GET::api-test-data",
+        },
+        {
+          description: "Surrogate pairs (high Unicode)",
+          path: "/api/test𝕏𝕐𝕑/data", // Mathematical script letters
+          expected: "GET::api-test-data",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should preserve ASCII alphanumeric and allowed symbols", () => {
+      const testCases = [
+        {
+          description: "ASCII letters and numbers",
+          path: "/api/users123/data456",
+          expected: "GET::api-users123-data456",
+        },
+        {
+          description: "Underscores",
+          path: "/api/user_profile/settings_data",
+          expected: "GET::api-user_profile-settings_data",
+        },
+        {
+          description: "Hyphens (escaped)",
+          path: "/api/user-profile/data-settings",
+          expected: "GET::api-user--profile-data--settings",
+        },
+        {
+          description: "Mixed allowed characters",
+          path: "/api/user123_profile-data/settings",
+          expected: "GET::api-user123_profile--data-settings",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should handle edge cases with Unicode and path structure", () => {
+      const testCases = [
+        {
+          description: "Unicode in path parameters",
+          path: "/api/users/{José}/profile",
+          expected: "GET::api-users-Jos-profile",
+        },
+        {
+          description: "Unicode mixed with special characters",
+          path: "/api/users/José@domain.com/profile",
+          expected: "GET::api-users-Josdomaincom-profile",
+        },
+        {
+          description: "Empty segments after Unicode removal",
+          path: "/api/用户/配置/profile",
+          expected: "GET::api---profile",
+        },
+        {
+          description: "Unicode at path boundaries",
+          path: "/José/api/María/",
+          expected: "GET::Jos-api-Mara",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+  })
+
+  describe("Leading and Trailing Slash Handling", () => {
+    it("should handle various leading slash patterns", () => {
+      const testCases = [
+        {
+          description: "Single leading slash (normal)",
+          path: "/users",
+          expected: "GET::users",
+        },
+        {
+          description: "No leading slash",
+          path: "users",
+          expected: "GET::users",
+        },
+        {
+          description: "Double leading slash",
+          path: "//users",
+          expected: "GET::users",
+        },
+        {
+          description: "Multiple leading slashes",
+          path: "////users",
+          expected: "GET::users",
+        },
+        {
+          description: "Leading slashes with path segments",
+          path: "///api/v1/users",
+          expected: "GET::api-v1-users",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should handle various trailing slash patterns", () => {
+      const testCases = [
+        {
+          description: "Single trailing slash",
+          path: "/users/",
+          expected: "GET::users",
+        },
+        {
+          description: "Double trailing slash",
+          path: "/users//",
+          expected: "GET::users",
+        },
+        {
+          description: "Multiple trailing slashes",
+          path: "/users////",
+          expected: "GET::users",
+        },
+        {
+          description: "Trailing slashes with complex path",
+          path: "/api/v1/users/profile/",
+          expected: "GET::api-v1-users-profile",
+        },
+        {
+          description: "Trailing slashes with path parameters",
+          path: "/users/{id}/profile/",
+          expected: "GET::users-id-profile",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should handle both leading and trailing slashes", () => {
+      const testCases = [
+        {
+          description: "Both leading and trailing single slashes",
+          path: "/users/",
+          expected: "GET::users",
+        },
+        {
+          description: "Multiple leading and trailing slashes",
+          path: "///users///",
+          expected: "GET::users",
+        },
+        {
+          description: "Complex path with leading and trailing slashes",
+          path: "//api/v1/users/profile//",
+          expected: "GET::api-v1-users-profile",
+        },
+        {
+          description: "Only slashes",
+          path: "////",
+          expected: "GET::",
+        },
+        {
+          description: "Single slash (root)",
+          path: "/",
+          expected: "GET::",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should handle consecutive slashes in middle of path", () => {
+      const testCases = [
+        {
+          description: "Double slash in middle",
+          path: "/api//users",
+          expected: "GET::api-users",
+        },
+        {
+          description: "Multiple consecutive slashes",
+          path: "/api////v1///users",
+          expected: "GET::api-v1-users",
+        },
+        {
+          description: "Mixed consecutive slashes",
+          path: "//api//v1/users//profile///",
+          expected: "GET::api-v1-users-profile",
+        },
+        {
+          description: "Consecutive slashes with path parameters",
+          path: "/users//{id}//profile",
+          expected: "GET::users-id-profile",
+        },
+        {
+          description: "Consecutive slashes with hyphens",
+          path: "/api//user-profile///settings",
+          expected: "GET::api-user--profile-settings",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
+    })
+
+    it("should maintain round-trip consistency with slash variations", () => {
+      const testCases = [
+        "/users/",
+        "//users",
+        "///users///",
+        "/api//v1///users/",
+        "//api/user-profile//",
+      ]
+
+      for (const originalPath of testCases) {
+        const method = "POST"
+        const toolId = generateToolId(method, originalPath)
+        const parsed = parseToolId(toolId)
+
+        // Method should match
+        expect(parsed.method).toBe(method)
+
+        // Path should be normalized (leading slash, no trailing slash, no consecutive slashes)
+        expect(parsed.path).toMatch(/^\/[^/].*[^/]$|^\/[^/]$|^\/$/)
+
+        // Should not have consecutive slashes
+        expect(parsed.path).not.toMatch(/\/\//)
+
+        // Should start with exactly one slash
+        expect(parsed.path).toMatch(/^\//)
+
+        // Should not end with slash unless it's root
+        if (parsed.path !== "/") {
+          expect(parsed.path).not.toMatch(/\/$/)
+        }
+      }
+    })
+
+    it("should handle edge cases with slashes and special characters", () => {
+      const testCases = [
+        {
+          description: "Slashes with Unicode",
+          path: "//api/José//users/",
+          expected: "GET::api-Jos-users",
+        },
+        {
+          description: "Slashes with special characters",
+          path: "//api@domain.com//users/",
+          expected: "GET::apidomaincom-users",
+        },
+        {
+          description: "Slashes with path parameters and special chars",
+          path: "/users//{email@domain.com}//profile/",
+          expected: "GET::users-emaildomaincom-profile",
+        },
+      ]
+
+      for (const { description, path, expected } of testCases) {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      }
     })
   })
 })
