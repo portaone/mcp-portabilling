@@ -60,13 +60,29 @@ These issues affect multiple parts of the system or represent significant gaps i
 - **Malformed Inputs for `parseToolId`**: Add tests for various malformed `toolId` strings (e.g., missing `::`, multiple `::`, no method, empty parts, methods in different cases if strictness is expected).
 - **Unicode Character Handling in `generateToolId`**: Clarify and add specific tests for a wider range of Unicode characters to ensure consistent sanitization behavior (e.g., are they all removed, or are some transliterated like 'é' to 'e'?).
 - **Leading/Trailing Slashes in `generateToolId`**: Test behavior with paths like `/users/` or `//users`.
+- **Status**: ✅ **COMPLETED**
 
 ### `auth-provider.test.ts`
 
-- **`isAuthError` Edge Cases**:
+- **`isAuthError` Edge Cases**: ✅ **COMPLETED**
   - Test with non-Axios plain error objects.
   - Test with Axios-like errors that have `error.response` but `error.response.status` is undefined or not a number.
-- **`StaticAuthProvider` Constructor**: Test with `null` passed to the constructor for headers (if not disallowed by TypeScript types).
+- **`StaticAuthProvider` Constructor**: ✅ **COMPLETED** - Test with `null` passed to the constructor for headers (if not disallowed by TypeScript types).
+- **Status**: ✅ **COMPLETED**
+- **Implementation Summary**:
+  - Added comprehensive edge case tests for `isAuthError` function covering:
+    - Non-Axios plain error objects (Error instances, generic objects)
+    - Axios-like errors with undefined, null, or non-number status values
+    - Errors with null or undefined response properties
+    - Edge case status codes (0, negative, very large, float values)
+  - Added extensive constructor edge case tests for `StaticAuthProvider` covering:
+    - Null and undefined values passed to constructor
+    - Non-object values (strings, numbers, booleans) passed to constructor
+    - Headers with non-string values and mixed data types
+    - Special characters and Unicode in header values
+    - Empty objects and whitespace handling
+  - All tests verify graceful error handling and robust behavior under edge conditions
+  - Maintained backward compatibility while improving test coverage from basic scenarios to comprehensive edge cases
 
 ### `server.test.ts`
 
