@@ -237,6 +237,7 @@ paths:
       })
 
       // Set up the stdin mock to simulate data flow
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       mockStdin.on.mockImplementation((event: string, callback: Function) => {
         if (event === "data") {
           setTimeout(() => callback(stdinContent), 0)
@@ -302,6 +303,7 @@ paths:
         configurable: true,
       })
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       mockStdin.on.mockImplementation((event: string, callback: Function) => {
         if (event === "end") {
           setTimeout(() => callback(), 0)
@@ -927,7 +929,7 @@ paths:
   describe("abbreviateOperationId", () => {
     const maxLength = 64
     // Helper to check length and character validity
-    const isValidToolName = (name: string) => {
+    const isValidToolName = (name: string): void => {
       expect(name.length).toBeLessThanOrEqual(maxLength)
       expect(name).toMatch(/^[a-z0-9-]+$/)
       expect(name).not.toMatch(/--/)

@@ -3,8 +3,8 @@ import { readFile } from "fs/promises"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
 import crypto from "crypto"
-import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
-import { generateToolId } from "./tool-id-utils"
+import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./utils/abbreviations.js"
+import { generateToolId } from "./utils/tool-id.js"
 
 /**
  * Spec input method type
@@ -281,7 +281,7 @@ export class OpenAPISpecLoader {
         const op = operation as OpenAPIV3.OperationObject
         const toolId = generateToolId(method, path)
 
-        let nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
+        const nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)
 
         const tool: Tool = {

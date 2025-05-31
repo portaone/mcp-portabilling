@@ -222,7 +222,7 @@ describe("OpenAPIServer", () => {
         authProvider: mockAuthProvider,
       }
 
-      const serverWithAuthProvider = new OpenAPIServer(configWithAuthProvider)
+      new OpenAPIServer(configWithAuthProvider)
 
       // Verify ApiClient was constructed with the AuthProvider
       expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)
@@ -234,7 +234,7 @@ describe("OpenAPIServer", () => {
         headers: { "X-API-Key": "test-key" },
       }
 
-      const serverWithHeaders = new OpenAPIServer(configWithHeaders)
+      new OpenAPIServer(configWithHeaders)
 
       // Verify ApiClient was constructed with a StaticAuthProvider
       expect(ApiClient).toHaveBeenCalledWith(
@@ -258,7 +258,7 @@ describe("OpenAPIServer", () => {
         authProvider: mockAuthProvider,
       }
 
-      const serverWithBoth = new OpenAPIServer(configWithBoth)
+      new OpenAPIServer(configWithBoth)
 
       // Verify ApiClient was constructed with the AuthProvider, not the headers
       expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)

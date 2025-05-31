@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
-import { parseToolId as parseToolIdUtil } from "./tool-id-utils"
+import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
 
 /**
  * Client for making API calls to the backend service
@@ -179,16 +179,12 @@ export class ApiClient {
 
         // Check if it's an authentication error and we haven't already retried
         if (!isRetry && isAuthError(axiosError)) {
-          try {
-            const shouldRetry = await this.authProvider.handleAuthError(axiosError)
-            if (shouldRetry) {
-              // Retry the request once
-              return this.executeApiCallWithRetry(toolId, params, true)
-            }
-          } catch (authHandlerError) {
-            // If auth handler throws, use that error instead
-            throw authHandlerError
+          const shouldRetry = await this.authProvider.handleAuthError(axiosError)
+          if (shouldRetry) {
+            // Retry the request once
+            return this.executeApiCallWithRetry(toolId, params, true)
           }
+          // If auth handler throws, use that error instead
         }
 
         throw new Error(

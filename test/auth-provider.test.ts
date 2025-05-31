@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect } from "vitest"
 import { AxiosError } from "axios"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "../src/auth-provider"
 
@@ -88,6 +88,7 @@ describe("AuthProvider", () => {
         return { Authorization: "Bearer valid-token" }
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       async handleAuthError(_error: AxiosError): Promise<boolean> {
         this.retryCount++
         if (this.retryCount === 1) {

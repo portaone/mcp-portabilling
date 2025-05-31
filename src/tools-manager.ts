@@ -2,7 +2,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { OpenAPISpecLoader } from "./openapi-loader"
 import { OpenAPIMCPServerConfig } from "./config"
 import { OpenAPIV3 } from "openapi-types"
-import { parseToolId as parseToolIdUtil } from "./tool-id-utils"
+import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
 
 /**
  * Manages the tools available in the MCP server

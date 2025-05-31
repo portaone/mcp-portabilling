@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import axios, { AxiosError } from "axios"
 import { ApiClient } from "../src/api-client"
-import { AuthProvider, StaticAuthProvider } from "../src/auth-provider"
+import { AuthProvider } from "../src/auth-provider"
 
 // Mock axios
 vi.mock("axios")

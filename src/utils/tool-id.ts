@@ -18,7 +18,7 @@
  * parseToolId("PUT::user_profile-data") → { method: "PUT", path: "/user_profile/data" }
  */
 export function parseToolId(toolId: string): { method: string; path: string } {
-  const [method, pathPart] = toolId.split("::")
+  const [method, pathPart] = toolId.split("::", 2)
   const path = pathPart ? "/" + pathPart.replace(/-/g, "/") : ""
   return { method, path }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseToolId, generateToolId } from "../src/tool-id-utils"
+import { parseToolId, generateToolId } from "../src/utils/tool-id.js"
 
 describe("Tool ID Utilities", () => {
   describe("parseToolId", () => {
