@@ -1178,6 +1178,767 @@ paths:
       expect(createUserManagementTool.name).toBeTruthy()
       expect(createUserManagementTool.name.length).toBeGreaterThan(0)
     })
+
+    // Replace the ambiguous test with comprehensive parameter inheritance tests
+    describe("Path Item Parameter Inheritance", () => {
+      it("should inherit path-level parameters when operation has no parameters", () => {
+        const specWithPathParams: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Test API", version: "1.0.0" },
+          paths: {
+            "/users/{id}": {
+              parameters: [
+                {
+                  name: "id",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string" },
+                  description: "User ID from path level",
+                },
+                {
+                  name: "version",
+                  in: "query",
+                  schema: { type: "string" },
+                  description: "API version from path level",
+                },
+              ],
+              get: {
+                operationId: "getUserById",
+                summary: "Get user by ID",
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(specWithPathParams)
+        const tool = tools.get("GET::users-id") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("id")
+        expect(tool.inputSchema.properties).toHaveProperty("version")
+        expect((tool.inputSchema.properties! as any).id.description).toBe("User ID from path level")
+        expect((tool.inputSchema.properties! as any).version.description).toBe(
+          "API version from path level",
+        )
+        expect(tool.inputSchema.required).toEqual(["id"])
+      })
+
+      it("should merge path-level and operation-level parameters", () => {
+        const specWithMixedParams: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Test API", version: "1.0.0" },
+          paths: {
+            "/users/{id}": {
+              parameters: [
+                {
+                  name: "id",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string" },
+                  description: "User ID from path level",
+                },
+                {
+                  name: "include",
+                  in: "query",
+                  schema: { type: "string" },
+                  description: "Include fields from path level",
+                },
+              ],
+              get: {
+                operationId: "getUserById",
+                summary: "Get user by ID",
+                parameters: [
+                  {
+                    name: "format",
+                    in: "query",
+                    schema: { type: "string", enum: ["json", "xml"] },
+                    description: "Response format from operation level",
+                  },
+                  {
+                    name: "limit",
+                    in: "query",
+                    required: true,
+                    schema: { type: "integer" },
+                    description: "Limit from operation level",
+                  },
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(specWithMixedParams)
+        const tool = tools.get("GET::users-id") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("id")
+        expect(tool.inputSchema.properties).toHaveProperty("include")
+        expect(tool.inputSchema.properties).toHaveProperty("format")
+        expect(tool.inputSchema.properties).toHaveProperty("limit")
+        expect(tool.inputSchema.required).toEqual(["id", "limit"])
+      })
+
+      it("should allow operation-level parameters to override path-level parameters", () => {
+        const specWithOverridingParams: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Test API", version: "1.0.0" },
+          paths: {
+            "/users/{id}": {
+              parameters: [
+                {
+                  name: "id",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string" },
+                  description: "User ID from path level",
+                },
+                {
+                  name: "format",
+                  in: "query",
+                  schema: { type: "string" },
+                  description: "Format from path level",
+                },
+              ],
+              get: {
+                operationId: "getUserById",
+                summary: "Get user by ID",
+                parameters: [
+                  {
+                    name: "format",
+                    in: "query",
+                    required: true,
+                    schema: { type: "string", enum: ["json", "xml"] },
+                    description: "Format from operation level (overrides path level)",
+                  },
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(specWithOverridingParams)
+        const tool = tools.get("GET::users-id") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("id")
+        expect(tool.inputSchema.properties).toHaveProperty("format")
+        expect((tool.inputSchema.properties! as any).format.description).toBe(
+          "Format from operation level (overrides path level)",
+        )
+        expect((tool.inputSchema.properties! as any).format.enum).toEqual(["json", "xml"])
+        expect(tool.inputSchema.required).toEqual(["id", "format"])
+      })
+    })
+
+    describe("Request Body Content Types", () => {
+      it("should handle application/x-www-form-urlencoded request body", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Form API", version: "1.0.0" },
+          paths: {
+            "/submit": {
+              post: {
+                operationId: "submitForm",
+                summary: "Submit form data",
+                requestBody: {
+                  content: {
+                    "application/x-www-form-urlencoded": {
+                      schema: {
+                        type: "object",
+                        properties: {
+                          username: { type: "string" },
+                          password: { type: "string" },
+                          remember: { type: "boolean" },
+                        },
+                        required: ["username", "password"],
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::submit") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("username")
+        expect(tool.inputSchema.properties).toHaveProperty("password")
+        expect(tool.inputSchema.properties).toHaveProperty("remember")
+        expect(tool.inputSchema.required).toEqual(["username", "password"])
+      })
+
+      it("should handle multipart/form-data request body with file uploads", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Upload API", version: "1.0.0" },
+          paths: {
+            "/upload": {
+              post: {
+                operationId: "uploadFile",
+                summary: "Upload file",
+                requestBody: {
+                  content: {
+                    "multipart/form-data": {
+                      schema: {
+                        type: "object",
+                        properties: {
+                          file: {
+                            type: "string",
+                            format: "binary",
+                            description: "File to upload",
+                          },
+                          metadata: {
+                            type: "string",
+                            format: "byte",
+                            description: "Base64 encoded metadata",
+                          },
+                          description: {
+                            type: "string",
+                            description: "File description",
+                          },
+                        },
+                        required: ["file"],
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::upload") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("file")
+        expect(tool.inputSchema.properties).toHaveProperty("metadata")
+        expect(tool.inputSchema.properties).toHaveProperty("description")
+        expect((tool.inputSchema.properties! as any).file.format).toBe("binary")
+        expect((tool.inputSchema.properties! as any).metadata.format).toBe("byte")
+        expect(tool.inputSchema.required).toEqual(["file"])
+      })
+
+      it("should choose first content type when multiple are available", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Multi Content API", version: "1.0.0" },
+          paths: {
+            "/data": {
+              post: {
+                operationId: "postData",
+                summary: "Post data",
+                requestBody: {
+                  content: {
+                    "application/xml": {
+                      schema: {
+                        type: "object",
+                        properties: { xmlData: { type: "string" } },
+                      },
+                    },
+                    "application/json": {
+                      schema: {
+                        type: "object",
+                        properties: { jsonData: { type: "string" } },
+                      },
+                    },
+                    "text/plain": {
+                      schema: { type: "string" },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::data") as Tool
+
+        expect(tool).toBeDefined()
+        // Should prefer application/json when available
+        expect(tool.inputSchema.properties).toHaveProperty("jsonData")
+        expect(tool.inputSchema.properties).not.toHaveProperty("xmlData")
+      })
+    })
+
+    describe("Schema Composition Keywords", () => {
+      it("should handle allOf schema composition", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Composition API", version: "1.0.0" },
+          paths: {
+            "/users": {
+              post: {
+                operationId: "createUser",
+                summary: "Create user",
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        allOf: [
+                          {
+                            type: "object",
+                            properties: {
+                              name: { type: "string" },
+                              email: { type: "string" },
+                            },
+                            required: ["name"],
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              age: { type: "integer" },
+                              active: { type: "boolean" },
+                            },
+                            required: ["age"],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::users") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("name")
+        expect(tool.inputSchema.properties).toHaveProperty("email")
+        expect(tool.inputSchema.properties).toHaveProperty("age")
+        expect(tool.inputSchema.properties).toHaveProperty("active")
+      })
+
+      it("should handle oneOf schema composition", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "OneOf API", version: "1.0.0" },
+          paths: {
+            "/payment": {
+              post: {
+                operationId: "processPayment",
+                summary: "Process payment",
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        oneOf: [
+                          {
+                            type: "object",
+                            properties: {
+                              creditCard: { type: "string" },
+                              expiryDate: { type: "string" },
+                            },
+                            required: ["creditCard"],
+                          },
+                          {
+                            type: "object",
+                            properties: {
+                              paypalEmail: { type: "string" },
+                            },
+                            required: ["paypalEmail"],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::payment") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema).toHaveProperty("oneOf")
+      })
+
+      it("should handle anyOf schema composition", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "AnyOf API", version: "1.0.0" },
+          paths: {
+            "/search": {
+              post: {
+                operationId: "search",
+                summary: "Search content",
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        anyOf: [
+                          {
+                            type: "object",
+                            properties: { query: { type: "string" } },
+                          },
+                          {
+                            type: "object",
+                            properties: { filters: { type: "array", items: { type: "string" } } },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::search") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema).toHaveProperty("anyOf")
+      })
+
+      it("should handle not schema composition", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Not API", version: "1.0.0" },
+          paths: {
+            "/validate": {
+              post: {
+                operationId: "validateData",
+                summary: "Validate data",
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        type: "object",
+                        properties: {
+                          value: {
+                            not: {
+                              type: "string",
+                              enum: ["forbidden"],
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("POST::validate") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("value")
+        expect((tool.inputSchema.properties! as any).value).toHaveProperty("not")
+      })
+    })
+
+    describe("Deprecated Operations", () => {
+      it("should handle deprecated operations", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Deprecated API", version: "1.0.0" },
+          paths: {
+            "/legacy": {
+              get: {
+                operationId: "getLegacyData",
+                summary: "Get legacy data",
+                deprecated: true,
+                responses: { "200": { description: "Success" } },
+              },
+            },
+            "/current": {
+              get: {
+                operationId: "getCurrentData",
+                summary: "Get current data",
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+
+        // Both tools should be created (deprecated operations are not skipped)
+        expect(tools.size).toBe(2)
+        expect(tools.has("GET::legacy")).toBe(true)
+        expect(tools.has("GET::current")).toBe(true)
+
+        const legacyTool = tools.get("GET::legacy") as Tool
+        const currentTool = tools.get("GET::current") as Tool
+
+        expect(legacyTool).toBeDefined()
+        expect(currentTool).toBeDefined()
+
+        // Check if deprecated flag is preserved (implementation dependent)
+        // Note: Current implementation doesn't explicitly handle deprecated flag
+        // This test documents the current behavior
+      })
+    })
+
+    describe("Header and Cookie Parameters", () => {
+      it("should handle header parameters with x-parameter-location", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Header API", version: "1.0.0" },
+          paths: {
+            "/secure": {
+              get: {
+                operationId: "getSecureData",
+                summary: "Get secure data",
+                parameters: [
+                  {
+                    name: "Authorization",
+                    in: "header",
+                    required: true,
+                    schema: { type: "string" },
+                    description: "Bearer token",
+                  },
+                  {
+                    name: "X-API-Version",
+                    in: "header",
+                    schema: { type: "string", default: "v1" },
+                    description: "API version header",
+                  },
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("GET::secure") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("Authorization")
+        expect(tool.inputSchema.properties).toHaveProperty("X-API-Version")
+
+        const authParam = (tool.inputSchema.properties! as any).Authorization
+        const versionParam = (tool.inputSchema.properties! as any)["X-API-Version"]
+
+        expect(authParam["x-parameter-location"]).toBe("header")
+        expect(versionParam["x-parameter-location"]).toBe("header")
+        expect(tool.inputSchema.required).toEqual(["Authorization"])
+      })
+
+      it("should handle cookie parameters with x-parameter-location", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Cookie API", version: "1.0.0" },
+          paths: {
+            "/session": {
+              get: {
+                operationId: "getSessionData",
+                summary: "Get session data",
+                parameters: [
+                  {
+                    name: "sessionId",
+                    in: "cookie",
+                    required: true,
+                    schema: { type: "string" },
+                    description: "Session identifier",
+                  },
+                  {
+                    name: "preferences",
+                    in: "cookie",
+                    schema: { type: "string" },
+                    description: "User preferences",
+                  },
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("GET::session") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("sessionId")
+        expect(tool.inputSchema.properties).toHaveProperty("preferences")
+
+        const sessionParam = (tool.inputSchema.properties! as any).sessionId
+        const prefsParam = (tool.inputSchema.properties! as any).preferences
+
+        expect(sessionParam["x-parameter-location"]).toBe("cookie")
+        expect(prefsParam["x-parameter-location"]).toBe("cookie")
+        expect(tool.inputSchema.required).toEqual(["sessionId"])
+      })
+
+      it("should handle mixed parameter locations", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Mixed Params API", version: "1.0.0" },
+          paths: {
+            "/users/{id}": {
+              get: {
+                operationId: "getUserWithMixedParams",
+                summary: "Get user with mixed parameter types",
+                parameters: [
+                  {
+                    name: "id",
+                    in: "path",
+                    required: true,
+                    schema: { type: "string" },
+                    description: "User ID",
+                  },
+                  {
+                    name: "format",
+                    in: "query",
+                    schema: { type: "string", enum: ["json", "xml"] },
+                    description: "Response format",
+                  },
+                  {
+                    name: "Authorization",
+                    in: "header",
+                    required: true,
+                    schema: { type: "string" },
+                    description: "Auth header",
+                  },
+                  {
+                    name: "sessionId",
+                    in: "cookie",
+                    schema: { type: "string" },
+                    description: "Session cookie",
+                  },
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        const tools = openAPILoader.parseOpenAPISpec(spec)
+        const tool = tools.get("GET::users-id") as Tool
+
+        expect(tool).toBeDefined()
+        expect(tool.inputSchema.properties).toHaveProperty("id")
+        expect(tool.inputSchema.properties).toHaveProperty("format")
+        expect(tool.inputSchema.properties).toHaveProperty("Authorization")
+        expect(tool.inputSchema.properties).toHaveProperty("sessionId")
+
+        const params = tool.inputSchema.properties! as any
+        expect(params.id["x-parameter-location"]).toBe("path")
+        expect(params.format["x-parameter-location"]).toBe("query")
+        expect(params.Authorization["x-parameter-location"]).toBe("header")
+        expect(params.sessionId["x-parameter-location"]).toBe("cookie")
+
+        expect(tool.inputSchema.required).toEqual(["id", "Authorization"])
+      })
+    })
+
+    describe("External References", () => {
+      it("should handle missing external references gracefully", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "External Ref API", version: "1.0.0" },
+          paths: {
+            "/users": {
+              post: {
+                operationId: "createUser",
+                summary: "Create user",
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: {
+                        $ref: "external.yaml#/components/schemas/User",
+                      },
+                    },
+                  },
+                },
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        // Should not throw an error, but handle gracefully
+        expect(() => {
+          const tools = openAPILoader.parseOpenAPISpec(spec)
+          expect(tools.size).toBe(1)
+          const tool = tools.get("POST::users") as Tool
+          expect(tool).toBeDefined()
+          // External refs that can't be resolved should result in empty schema
+          expect(tool.inputSchema.properties).toHaveProperty("body")
+        }).not.toThrow()
+      })
+
+      it("should handle malformed external references", () => {
+        const spec: OpenAPIV3.Document = {
+          openapi: "3.0.0",
+          info: { title: "Malformed Ref API", version: "1.0.0" },
+          paths: {
+            "/data": {
+              get: {
+                operationId: "getData",
+                summary: "Get data",
+                parameters: [
+                  {
+                    $ref: "invalid-reference-format",
+                  } as any,
+                ],
+                responses: { "200": { description: "Success" } },
+              },
+            },
+          },
+        }
+
+        // Should handle malformed refs gracefully
+        expect(() => {
+          const tools = openAPILoader.parseOpenAPISpec(spec)
+          expect(tools.size).toBe(1)
+          const tool = tools.get("GET::data") as Tool
+          expect(tool).toBeDefined()
+        }).not.toThrow()
+      })
+    })
+
+    it("should skip parameters property in pathItem", () => {
+      const specWithPathParams: OpenAPIV3.Document = {
+        ...mockOpenAPISpec,
+        paths: {
+          "/users": {
+            parameters: [
+              {
+                name: "common",
+                in: "query",
+                schema: {
+                  type: "string",
+                },
+              },
+            ],
+            get: {
+              operationId: "getUsers",
+              responses: {},
+            },
+          },
+        },
+      }
+
+      const tools = openAPILoader.parseOpenAPISpec(specWithPathParams)
+      expect(tools.size).toBe(1)
+      expect(tools.has("GET::users")).toBe(true)
+    })
   })
 
   describe("disableAbbreviation", () => {
