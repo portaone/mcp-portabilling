@@ -307,7 +307,27 @@ These issues affect multiple parts of the system or represent significant gaps i
 
 ## III. General Recommendations
 
-- **Developer Documentation**: For complex logic like `toolId` generation/parsing rules, abbreviation rules, and filter interactions, ensure clear developer documentation accompanies the code.
-- **Consistency**: Strive for consistent use of shared utilities (like `parseToolId`) across different modules to avoid subtle variations in behavior.
+- **✅ Developer Documentation**: ✅ **COMPLETED** - Created comprehensive developer documentation with clear separation between user and developer information:
+  - **New Developer Guide**: Created `docs/developer-guide.md` with comprehensive coverage of:
+    - Architecture overview with component diagrams
+    - Core concepts (ExtendedTool interface, tools loading modes)
+    - Tool ID system with detailed hyphen escaping scheme documentation
+    - Tool name abbreviation system with processing steps and examples
+    - Resource name extraction algorithm and examples
+    - Filtering system with precedence rules and case sensitivity
+    - Authentication system (AuthProvider interface and flow)
+    - OpenAPI processing (reference resolution, schema composition, parameter inheritance)
+    - Development workflow and project structure
+    - Testing guidelines and patterns
+    - Contributing guidelines with code style and documentation standards
+  - **Restructured README**: Reorganized main README with clear sections:
+    - Documentation navigation at the top
+    - User Guide section for end users (Claude Desktop, Cursor, etc.)
+    - Library Usage section for developers creating custom servers
+    - Developer Information section with links to comprehensive guides
+    - Clear separation between user-facing and developer-facing content
+  - **Enhanced Documentation Links**: Added cross-references between documents and examples
+  - **Google Technical Writing Standards**: All documentation follows Google's Technical Writing Style Guide
+- **✅ Consistency**: Ensured consistent use of shared utilities (like `parseToolId`) across different modules through comprehensive testing and documentation of the centralized approach.
 
 This plan should provide a clear roadmap for further enhancing the quality and reliability of the mcp-openapi-server.
