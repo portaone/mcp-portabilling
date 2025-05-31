@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { ToolsManager } from "../src/tools-manager"
 import { OpenAPISpecLoader, ExtendedTool } from "../src/openapi-loader"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
+import { parseToolId as parseToolIdUtil } from "../src/utils/tool-id.js"
 
 // Mock dependencies
 vi.mock("../src/openapi-loader", () => {
@@ -69,6 +70,353 @@ describe("ToolsManager", () => {
         "get-api-endpoint-schema",
         "invoke-api-endpoint",
       ])
+    })
+
+    describe("toolsMode: explicit", () => {
+      it("should only load tools explicitly listed in includeTools when toolsMode is explicit", async () => {
+        // Setup raw tools
+        const mockTools = new Map([
+          [
+            "GET::users",
+            { name: "getUsers", httpMethod: "GET", resourceName: "users" } as ExtendedTool,
+          ],
+          [
+            "POST::users",
+            { name: "createUser", httpMethod: "POST", resourceName: "users" } as ExtendedTool,
+          ],
+          [
+            "GET::orders",
+            { name: "getOrders", httpMethod: "GET", resourceName: "orders" } as ExtendedTool,
+          ],
+          [
+            "DELETE::orders-id",
+            { name: "deleteOrder", httpMethod: "DELETE", resourceName: "orders" } as ExtendedTool,
+          ],
+        ])
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+
+        // Configure for explicit mode with specific tools
+        ;(toolsManager as any).config.toolsMode = "explicit"
+        ;(toolsManager as any).config.includeTools = ["GET::users", "POST::users"]
+
+        await toolsManager.initialize()
+
+        // Should only include explicitly listed tools, ignoring other filters
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        expect(resultToolIds).toEqual(["GET::users", "POST::users"])
+      })
+
+      it("should load no tools when toolsMode is explicit but includeTools is empty", async () => {
+        const mockTools = new Map([
+          ["GET::users", { name: "getUsers" } as ExtendedTool],
+          ["POST::users", { name: "createUser" } as ExtendedTool],
+        ])
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "explicit"
+        ;(toolsManager as any).config.includeTools = []
+
+        await toolsManager.initialize()
+
+        expect(Array.from((toolsManager as any).tools.keys())).toEqual([])
+      })
+
+      it("should ignore other filters when toolsMode is explicit", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: "GET",
+              resourceName: "users",
+              tags: ["public"],
+            } as ExtendedTool,
+          ],
+          [
+            "POST::orders",
+            {
+              name: "createOrder",
+              httpMethod: "POST",
+              resourceName: "orders",
+              tags: ["admin"],
+            } as ExtendedTool,
+          ],
+        ])
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "explicit"
+        ;(toolsManager as any).config.includeTools = ["POST::orders"] // Explicitly include POST::orders
+        ;(toolsManager as any).config.includeOperations = ["get"] // This should be ignored
+        ;(toolsManager as any).config.includeResources = ["users"] // This should be ignored
+        ;(toolsManager as any).config.includeTags = ["public"] // This should be ignored
+
+        await toolsManager.initialize()
+
+        // Should only include POST::orders despite other filters that would exclude it
+        expect(Array.from((toolsManager as any).tools.keys())).toEqual(["POST::orders"])
+      })
+
+      it("should handle tool names in includeTools for explicit mode", async () => {
+        const mockTools = new Map([
+          ["GET::users", { name: "getUsers", httpMethod: "GET" } as ExtendedTool],
+          ["POST::users", { name: "createUser", httpMethod: "POST" } as ExtendedTool],
+          ["GET::orders", { name: "getOrders", httpMethod: "GET" } as ExtendedTool],
+        ])
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "explicit"
+        ;(toolsManager as any).config.includeTools = ["getUsers", "createUser"] // Using tool names instead of IDs
+
+        await toolsManager.initialize()
+
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        expect(resultToolIds).toEqual(["GET::users", "POST::users"])
+      })
+    })
+
+    describe("Resource Name Extraction Logic", () => {
+      it("should handle complex path examples for resource filtering", async () => {
+        const mockTools = new Map([
+          // Simple resource paths
+          ["GET::users", { name: "getUsers", resourceName: "users" } as ExtendedTool],
+          ["GET::orders", { name: "getOrders", resourceName: "orders" } as ExtendedTool],
+
+          // Complex nested paths - resource should be the last non-parameter segment
+          [
+            "GET::api-v1-user-profile-settings",
+            { name: "getUserProfileSettings", resourceName: "settings" } as ExtendedTool,
+          ],
+          [
+            "POST::api-v2-organizations-id-members",
+            { name: "addOrgMember", resourceName: "members" } as ExtendedTool,
+          ],
+          [
+            "PUT::service-users-authority-groups-id",
+            { name: "updateAuthorityGroup", resourceName: "groups" } as ExtendedTool,
+          ],
+
+          // Paths with hyphens and underscores
+          [
+            "GET::user_profile-data",
+            { name: "getUserProfileData", resourceName: "data" } as ExtendedTool,
+          ],
+          [
+            "POST::api_v1-user-management",
+            { name: "manageUser", resourceName: "management" } as ExtendedTool,
+          ],
+
+          // Edge cases
+          ["GET::health", { name: "healthCheck", resourceName: "health" } as ExtendedTool],
+          ["GET::api-status-check", { name: "statusCheck", resourceName: "check" } as ExtendedTool],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+
+        // Test filtering by different resource names
+        const testCases = [
+          { filter: ["users"], expected: ["GET::users"] },
+          { filter: ["settings"], expected: ["GET::api-v1-user-profile-settings"] },
+          { filter: ["members"], expected: ["POST::api-v2-organizations-id-members"] },
+          { filter: ["groups"], expected: ["PUT::service-users-authority-groups-id"] },
+          { filter: ["data"], expected: ["GET::user_profile-data"] },
+          { filter: ["management"], expected: ["POST::api_v1-user-management"] },
+          { filter: ["health"], expected: ["GET::health"] },
+          { filter: ["check"], expected: ["GET::api-status-check"] },
+          { filter: ["users", "data"], expected: ["GET::users", "GET::user_profile-data"] },
+        ]
+
+        for (const testCase of testCases) {
+          // Reset tools manager for each test
+          const freshToolsManager = new ToolsManager({
+            ...mockConfig,
+            toolsMode: "all",
+            includeResources: testCase.filter,
+          })
+          ;(freshToolsManager as any).specLoader = mockSpecLoader
+
+          await freshToolsManager.initialize()
+
+          const resultToolIds = Array.from((freshToolsManager as any).tools.keys())
+          expect(resultToolIds.sort()).toEqual(testCase.expected.sort())
+        }
+      })
+
+      it("should handle resource names with special characters and case variations", async () => {
+        const mockTools = new Map([
+          [
+            "GET::api-user_profiles",
+            { name: "getUserProfiles", resourceName: "user_profiles" } as ExtendedTool,
+          ],
+          ["GET::api-UserData", { name: "getUserData", resourceName: "UserData" } as ExtendedTool],
+          [
+            "GET::api-ADMIN_PANEL",
+            { name: "getAdminPanel", resourceName: "ADMIN_PANEL" } as ExtendedTool,
+          ],
+          [
+            "GET::api-kebab-case-resource",
+            { name: "getKebabResource", resourceName: "resource" } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+        ;(toolsManager as any).config.includeResources = [
+          "user_profiles",
+          "userdata",
+          "admin_panel",
+        ] // Mixed case filters
+
+        await toolsManager.initialize()
+
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        // Should match case-insensitively
+        expect(resultToolIds.sort()).toEqual(
+          ["GET::api-user_profiles", "GET::api-UserData", "GET::api-ADMIN_PANEL"].sort(),
+        )
+      })
+    })
+
+    describe("Filter Order of Application", () => {
+      it("should apply filters in the correct order: includeTools -> includeOperations -> includeResources -> includeTags", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: "GET",
+              resourceName: "users",
+              tags: ["public", "read"],
+            } as ExtendedTool,
+          ],
+          [
+            "POST::users",
+            {
+              name: "createUser",
+              httpMethod: "POST",
+              resourceName: "users",
+              tags: ["admin", "write"],
+            } as ExtendedTool,
+          ],
+          [
+            "GET::orders",
+            {
+              name: "getOrders",
+              httpMethod: "GET",
+              resourceName: "orders",
+              tags: ["public", "read"],
+            } as ExtendedTool,
+          ],
+          [
+            "DELETE::orders-id",
+            {
+              name: "deleteOrder",
+              httpMethod: "DELETE",
+              resourceName: "orders",
+              tags: ["admin", "write"],
+            } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+
+        // Apply all filters - should work as AND operation
+        ;(toolsManager as any).config.includeOperations = ["get", "post"] // Excludes DELETE
+        ;(toolsManager as any).config.includeResources = ["users"] // Excludes orders
+        ;(toolsManager as any).config.includeTags = ["public"] // Excludes admin-only tools
+
+        await toolsManager.initialize()
+
+        // Only GET::users should match all criteria:
+        // - Operation: GET (✓) or POST (✗ - has admin tag, not public)
+        // - Resource: users (✓)
+        // - Tags: public (✓)
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        expect(resultToolIds).toEqual(["GET::users"])
+      })
+
+      it("should document filter precedence with includeTools taking highest priority", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: "GET",
+              resourceName: "users",
+              tags: ["public"],
+            } as ExtendedTool,
+          ],
+          [
+            "DELETE::orders-id",
+            {
+              name: "deleteOrder",
+              httpMethod: "DELETE",
+              resourceName: "orders",
+              tags: ["admin"],
+            } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+
+        // includeTools should override other filters
+        ;(toolsManager as any).config.includeTools = ["DELETE::orders-id"] // Explicitly include this tool
+        ;(toolsManager as any).config.includeOperations = ["get"] // Would normally exclude DELETE
+        ;(toolsManager as any).config.includeResources = ["users"] // Would normally exclude orders
+        ;(toolsManager as any).config.includeTags = ["public"] // Would normally exclude admin
+
+        await toolsManager.initialize()
+
+        // DELETE::orders-id should be included despite other filters because it's in includeTools
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        expect(resultToolIds).toEqual(["DELETE::orders-id"])
+      })
+
+      it("should handle empty filter arrays correctly", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: "GET",
+              resourceName: "users",
+              tags: ["public"],
+            } as ExtendedTool,
+          ],
+          [
+            "POST::orders",
+            {
+              name: "createOrder",
+              httpMethod: "POST",
+              resourceName: "orders",
+              tags: ["admin"],
+            } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+
+        // Empty arrays should not filter anything
+        ;(toolsManager as any).config.includeTools = []
+        ;(toolsManager as any).config.includeOperations = []
+        ;(toolsManager as any).config.includeResources = []
+        ;(toolsManager as any).config.includeTags = []
+
+        await toolsManager.initialize()
+
+        // All tools should be included
+        const resultToolIds = Array.from((toolsManager as any).tools.keys())
+        expect(resultToolIds.sort()).toEqual(["GET::users", "POST::orders"])
+      })
     })
 
     it("should filter tools by includeTools list", async () => {
@@ -231,6 +579,110 @@ describe("ToolsManager", () => {
       // Should match "Users" resource case-insensitively
       expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
     })
+
+    describe("Edge Cases and Error Handling", () => {
+      it("should handle undefined or null filter arrays", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: "GET",
+              resourceName: "users",
+              tags: ["public"],
+            } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+
+        // Set filters to undefined/null
+        ;(toolsManager as any).config.includeTools = undefined
+        ;(toolsManager as any).config.includeOperations = null
+        ;(toolsManager as any).config.includeResources = undefined
+        ;(toolsManager as any).config.includeTags = null
+
+        await toolsManager.initialize()
+
+        // Should include all tools when filters are undefined/null
+        expect(Array.from((toolsManager as any).tools.keys())).toEqual(["GET::users"])
+      })
+
+      it("should handle tools with empty or undefined tags arrays", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              tags: [],
+              inputSchema: { type: "object", properties: {} },
+            } as ExtendedTool,
+          ],
+          [
+            "POST::orders",
+            {
+              name: "createOrder",
+              tags: undefined,
+              inputSchema: { type: "object", properties: {} },
+            } as ExtendedTool,
+          ],
+          [
+            "PUT::products",
+            {
+              name: "updateProduct",
+              inputSchema: { type: "object", properties: {} },
+            } as ExtendedTool,
+          ], // No tags property
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+        ;(toolsManager as any).config.includeTags = ["public"]
+
+        await toolsManager.initialize()
+
+        // No tools should match since none have the "public" tag
+        expect(Array.from((toolsManager as any).tools.keys())).toEqual([])
+      })
+
+      it("should handle malformed tool metadata gracefully", async () => {
+        const mockTools = new Map([
+          [
+            "GET::users",
+            {
+              name: "getUsers",
+              httpMethod: 123,
+              resourceName: null,
+              tags: "not-an-array",
+              inputSchema: { type: "object", properties: {} },
+            } as any,
+          ],
+          [
+            "POST::orders",
+            {
+              name: "createOrder",
+              httpMethod: "",
+              resourceName: "",
+              tags: [],
+              inputSchema: { type: "object", properties: {} },
+            } as ExtendedTool,
+          ],
+        ])
+
+        mockSpecLoader.loadOpenAPISpec.mockResolvedValue({ paths: {} } as any)
+        mockSpecLoader.parseOpenAPISpec.mockReturnValue(mockTools)
+        ;(toolsManager as any).config.toolsMode = "all"
+        ;(toolsManager as any).config.includeOperations = ["post"]
+
+        await toolsManager.initialize()
+
+        // Should handle malformed data gracefully and only include valid tools
+        expect(Array.from((toolsManager as any).tools.keys())).toEqual([])
+      })
+    })
   })
 
   describe("getAllTools - return all tools", () => {
@@ -374,6 +826,33 @@ describe("ToolsManager", () => {
       }
     })
 
+    it("should handle legitimate hyphens in path segments correctly", () => {
+      // Test the enhanced hyphen handling with escaped hyphens
+      const testCases = [
+        {
+          toolId: "GET::api-resource--name-items",
+          expected: { method: "GET", path: "/api/resource-name/items" },
+        },
+        {
+          toolId: "POST::user--profile-data",
+          expected: { method: "POST", path: "/user-profile/data" },
+        },
+        {
+          toolId: "PUT::api-v1-user--management--system",
+          expected: { method: "PUT", path: "/api/v1/user-management-system" },
+        },
+        {
+          toolId: "DELETE::complex--path-with--multiple--hyphens",
+          expected: { method: "DELETE", path: "/complex-path/with-multiple-hyphens" },
+        },
+      ]
+
+      for (const testCase of testCases) {
+        const result = toolsManager.parseToolId(testCase.toolId)
+        expect(result).toEqual(testCase.expected)
+      }
+    })
+
     it("REGRESSION: should resolve original toolId ambiguity issue with underscores and hyphens", () => {
       // This test validates that the original issue is resolved:
       // Before the fix, paths with underscores and hyphens could be parsed incorrectly
@@ -458,6 +937,23 @@ describe("ToolsManager", () => {
 
         // The new format eliminates this ambiguity completely
       }
+    })
+
+    it("should use centralized parseToolId utility consistently", () => {
+      // Verify that ToolsManager.parseToolId uses the same utility as ApiClient
+      // This ensures consistency across modules
+
+      const testToolId = "GET::api-v1-users-id-profile"
+      const result = toolsManager.parseToolId(testToolId)
+
+      // Test the utility directly to ensure consistency
+      const utilityResult = parseToolIdUtil(testToolId)
+
+      expect(result).toEqual(utilityResult)
+      expect(result).toEqual({
+        method: "GET",
+        path: "/api/v1/users/id/profile",
+      })
     })
   })
 })

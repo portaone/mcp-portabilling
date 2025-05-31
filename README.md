@@ -42,12 +42,44 @@ const config = {
     "X-API-Key": "your-api-key",
   },
   transportType: "stdio" as const,
-  toolsMode: "all" as const,
+  toolsMode: "all" as const, // Options: "all", "dynamic", "explicit"
 }
 
 const server = new OpenAPIServer(config)
 const transport = new StdioServerTransport()
 await server.start(transport)
+```
+
+### Tool Loading Modes
+
+The `toolsMode` configuration option controls which tools are loaded from your OpenAPI specification:
+
+```typescript
+// Load all tools from the spec (default)
+const config = {
+  // ... other config
+  toolsMode: "all" as const,
+  // Optional: Apply filters to control which tools are loaded
+  includeTools: ["GET::users", "POST::users"], // Only these tools
+  includeTags: ["public"], // Only tools with these tags
+  includeResources: ["users"], // Only tools under these resources
+  includeOperations: ["get", "post"], // Only these HTTP methods
+}
+
+// Load only dynamic meta-tools for API exploration
+const config = {
+  // ... other config
+  toolsMode: "dynamic" as const,
+  // Provides: list-api-endpoints, get-api-endpoint-schema, invoke-api-endpoint
+}
+
+// Load only explicitly specified tools (ignores other filters)
+const config = {
+  // ... other config
+  toolsMode: "explicit" as const,
+  includeTools: ["GET::users", "POST::users"], // Only these exact tools
+  // includeTags, includeResources, includeOperations are ignored in explicit mode
+}
 ```
 
 ### Advanced Authentication with AuthProvider
@@ -304,7 +336,7 @@ The server can be configured through environment variables or command line argum
 - `HTTP_PORT` - Port for HTTP transport (default: 3000)
 - `HTTP_HOST` - Host for HTTP transport (default: "127.0.0.1")
 - `ENDPOINT_PATH` - Endpoint path for HTTP transport (default: "/mcp")
-- `TOOLS_MODE` - Tools loading mode: "all" (load all endpoint-based tools) or "dynamic" (load only meta-tools) (default: "all")
+- `TOOLS_MODE` - Tools loading mode: "all" (load all endpoint-based tools), "dynamic" (load only meta-tools), or "explicit" (load only tools specified in includeTools) (default: "all")
 - `DISABLE_ABBREVIATION` - Disable name optimization (this could throw errors when name is > 64 chars)
 
 ### Command Line Arguments
@@ -455,7 +487,10 @@ The MCP server handles various OpenAPI schema complexities:
 
 Based on the Stainless article "What We Learned Converting Complex OpenAPI Specs to MCP Servers" (https://www.stainless.com/blog/what-we-learned-converting-complex-openapi-specs-to-mcp-servers), the following flags were added to control which API endpoints (tools) are loaded:
 
-- `--tools <all|dynamic>`: Choose to load all tools (default) or only dynamic meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`).
+- `--tools <all|dynamic|explicit>`: Choose tool loading mode:
+  - `all` (default): Load all tools from the OpenAPI spec, applying any specified filters
+  - `dynamic`: Load only dynamic meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`)
+  - `explicit`: Load only tools explicitly listed in `--tool` options, ignoring all other filters
 - `--tool <toolId>`: Import only specified tool IDs or names. Can be used multiple times.
 - `--tag <tag>`: Import only tools with the specified OpenAPI tag. Can be used multiple times.
 - `--resource <resource>`: Import only tools under the specified resource path prefixes. Can be used multiple times.
@@ -467,7 +502,10 @@ Based on the Stainless article "What We Learned Converting Complex OpenAPI Specs
 # Load only dynamic meta-tools
 npx @ivotoby/openapi-mcp-server --api-base-url https://api.example.com --openapi-spec https://api.example.com/openapi.json --tools dynamic
 
-# Load only the GET /users endpoint tool
+# Load only explicitly specified tools (ignores other filters)
+npx @ivotoby/openapi-mcp-server --api-base-url https://api.example.com --openapi-spec https://api.example.com/openapi.json --tools explicit --tool GET::users --tool POST::users
+
+# Load only the GET /users endpoint tool (using all mode with filtering)
 npx @ivotoby/openapi-mcp-server --api-base-url https://api.example.com --openapi-spec https://api.example.com/openapi.json --tool GET-users
 
 # Load tools tagged with "user" under the "/users" resource
@@ -541,7 +579,7 @@ A: Use the `AuthProvider` interface instead of static headers. AuthProvider allo
 A: `AuthProvider` is an interface for dynamic authentication that gets fresh headers before each request and handles authentication errors. Use it when your API has expiring tokens, requires token refresh, or needs complex authentication logic that static headers can't handle.
 
 **Q: How do I filter which tools are loaded?**
-A: Use the `--tool`, `--tag`, `--resource`, and `--operation` flags, or set `TOOLS_MODE=dynamic` for meta-tools only.
+A: Use the `--tool`, `--tag`, `--resource`, and `--operation` flags with `--tools all` (default), set `--tools dynamic` for meta-tools only, or use `--tools explicit` to load only tools specified with `--tool` (ignoring other filters).
 
 **Q: When should I use dynamic mode?**
 A: Dynamic mode provides meta-tools (`list-api-endpoints`, `get-api-endpoint-schema`, `invoke-api-endpoint`) to inspect and interact with endpoints without preloading all operations, which is useful for large or changing APIs.

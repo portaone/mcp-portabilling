@@ -81,7 +81,40 @@ export class ToolsManager {
       this.tools = this.createDynamicTools()
       return
     }
-    // Load and filter standard tools
+
+    if (this.config.toolsMode === "explicit") {
+      // Only load tools explicitly listed in includeTools
+      const rawTools = this.specLoader.parseOpenAPISpec(spec)
+      const filtered = new Map<string, Tool>()
+
+      if (this.config.includeTools && this.config.includeTools.length > 0) {
+        const includeToolsLower = this.config.includeTools.map((t) => t.toLowerCase())
+
+        for (const [toolId, tool] of rawTools.entries()) {
+          const toolIdLower = toolId.toLowerCase()
+          const toolNameLower = tool.name.toLowerCase()
+
+          // Include tool if it matches by ID or name
+          if (
+            includeToolsLower.includes(toolIdLower) ||
+            includeToolsLower.includes(toolNameLower)
+          ) {
+            filtered.set(toolId, tool)
+          }
+        }
+      }
+      // If includeTools is empty or undefined, no tools are loaded in explicit mode
+
+      this.tools = filtered
+
+      // Log the registered tools
+      for (const [toolId, tool] of this.tools.entries()) {
+        console.error(`Registered tool: ${toolId} (${tool.name})`)
+      }
+      return
+    }
+
+    // Load and filter standard tools (for "all" mode)
     const rawTools = this.specLoader.parseOpenAPISpec(spec)
     const filtered = new Map<string, Tool>()
 
@@ -96,7 +129,7 @@ export class ToolsManager {
     for (const [toolId, tool] of rawTools.entries()) {
       const extendedTool = tool as ExtendedTool
 
-      // includeTools filter
+      // includeTools filter - takes highest priority
       if (includeToolsLower.length > 0) {
         const toolIdLower = toolId.toLowerCase()
         const toolNameLower = tool.name.toLowerCase()
@@ -106,11 +139,17 @@ export class ToolsManager {
         ) {
           continue
         }
+        // If tool is explicitly included, skip other filters and add it
+        filtered.set(toolId, tool)
+        continue
       }
 
       // includeOperations filter
       if (includeOperationsLower.length > 0) {
-        const httpMethod = extendedTool.httpMethod?.toLowerCase()
+        const httpMethod =
+          typeof extendedTool.httpMethod === "string"
+            ? extendedTool.httpMethod.toLowerCase()
+            : undefined
         if (!httpMethod || !includeOperationsLower.includes(httpMethod)) {
           continue
         }
@@ -118,7 +157,10 @@ export class ToolsManager {
 
       // includeResources filter
       if (includeResourcesLower.length > 0) {
-        const resourceName = extendedTool.resourceName?.toLowerCase()
+        const resourceName =
+          typeof extendedTool.resourceName === "string"
+            ? extendedTool.resourceName.toLowerCase()
+            : undefined
         if (!resourceName || !includeResourcesLower.includes(resourceName)) {
           continue
         }
@@ -126,8 +168,10 @@ export class ToolsManager {
 
       // includeTags filter
       if (includeTagsLower.length > 0) {
-        const toolTags = extendedTool.tags || []
-        const hasMatchingTag = toolTags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))
+        const toolTags = Array.isArray(extendedTool.tags) ? extendedTool.tags : []
+        const hasMatchingTag = toolTags.some(
+          (tag) => typeof tag === "string" && includeTagsLower.includes(tag.toLowerCase()),
+        )
         if (!hasMatchingTag) {
           continue
         }
