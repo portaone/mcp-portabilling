@@ -567,4 +567,175 @@ paths:
       expect(tool.inputSchema.required).toEqual(["body"])
     })
   })
+
+  describe("disableAbbreviation", () => {
+    it("should not abbreviate operation IDs when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const longName = "ServiceUsersManagementController_updateServiceUsersAuthorityGroup"
+      const result = loader.abbreviateOperationId(longName)
+
+      // Should not be abbreviated
+      expect(result).toContain("service-users-management-controller")
+      expect(result).toContain("update-service-users-authority-group")
+    })
+
+    it("should preserve number-letter combinations like web3 when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const nameWithNumbers = "web3ApiController"
+      const result = loader.abbreviateOperationId(nameWithNumbers)
+
+      // Should preserve "web3" and not split it to "web-3"
+      expect(result).toBe("web3-api-controller")
+      expect(result).not.toContain("web-3")
+    })
+
+    it("should still split camelCase when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const camelCaseName = "getUserProfile"
+      const result = loader.abbreviateOperationId(camelCaseName)
+
+      // Should split camelCase but not abbreviate
+      expect(result).toBe("get-user-profile")
+    })
+
+    it("should handle various number-letter combinations when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      
+      expect(loader.abbreviateOperationId("api2DataProcessor")).toBe("api2-data-processor")
+      expect(loader.abbreviateOperationId("blockchain2Handler")).toBe("blockchain2-handler")
+      expect(loader.abbreviateOperationId("v1ApiService")).toBe("v1-api-service")
+      expect(loader.abbreviateOperationId("oauth2TokenManager")).toBe("oauth2-token-manager")
+    })
+  })
+
+  describe("abbreviateOperationId", () => {
+    const maxLength = 64
+    // Helper to check length and character validity
+    const isValidToolName = (name: string) => {
+      expect(name.length).toBeLessThanOrEqual(maxLength)
+      expect(name).toMatch(/^[a-z0-9-]+$/)
+      expect(name).not.toMatch(/--/)
+      expect(name.startsWith("-")).toBe(false)
+      expect(name.endsWith("-")).toBe(false)
+    }
+
+    it("should not change short, valid names", () => {
+      const name = "short-and-valid"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toBe(name)
+      isValidToolName(result)
+    })
+
+    it("should sanitize basic invalid characters and lowercase", () => {
+      const name = "Get User By ID"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toBe("get-user-by-id")
+      isValidToolName(result)
+    })
+
+    it("should handle empty string input", () => {
+      const result = openAPILoader.abbreviateOperationId("", maxLength)
+      expect(result).toBe("unnamed-tool")
+      isValidToolName(result)
+    })
+
+    it("should handle string with only special characters", () => {
+      const result = openAPILoader.abbreviateOperationId("_!@#$%^&*_()+", maxLength)
+      // Expecting a hash as it becomes empty after initial sanitization
+      expect(result).toMatch(/^tool-[a-f0-9]{8}$/)
+      isValidToolName(result)
+    })
+
+    it("should remove common words", () => {
+      const name = "UserServiceGetUserDetailsControllerApi"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      // UserServiceGetUserDetailsControllerApi -> User Service Get User Details
+      // Remove Controller, Api -> User Service Get User Details
+      // Abbr: Usr Svc Get Usr Details -> usr-svc-get-usr-details
+      expect(result).toBe("usr-svc-get-usr-details")
+      isValidToolName(result)
+    })
+
+    it("should apply standard abbreviations preserving TitleCase", () => {
+      const name = "UpdateUserConfigurationManagement"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toBe("upd-usr-config-mgmt")
+      isValidToolName(result)
+    })
+
+    it("should apply standard abbreviations preserving ALLCAPS", () => {
+      const name = "LIST_USER_RESOURCES_API"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toBe("lst-usr-resrcs")
+      isValidToolName(result)
+    })
+
+    it("should apply vowel removal for long words", () => {
+      const name = "ServiceUsersExtraordinarilyLongManagementControllerUpdateUserAuthorityGroup"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      // This will likely be truncated with hash as well due to length
+      expect(result.length).toBeLessThanOrEqual(maxLength)
+      isValidToolName(result)
+    })
+
+    it("should truncate and hash very long names", () => {
+      const name =
+        "ThisIsAVeryLongOperationIdThatExceedsTheMaximumLengthAndNeedsToBeTruncatedAndHashedServiceUsersManagementControllerUpdateUserAuthorityGroup"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toMatch(/^[a-z0-9-]+-[a-f0-9]{4}$/)
+      expect(result.length).toBeLessThanOrEqual(maxLength)
+      isValidToolName(result)
+    })
+
+    it("should handle names with numbers (normal mode)", () => {
+      const name = "getUserDetailsForUser123AndService456"
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      // In normal mode, numbers should be separated
+      expect(result).toBe("get-usr-details-usr-123-svc-456")
+      isValidToolName(result)
+    })
+
+    it("should handle names with numbers vs disableAbbreviation mode", () => {
+      const name = "web3ApiController"
+      const normalLoader = new OpenAPISpecLoader({ disableAbbreviation: false })
+      const disabledLoader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      
+      const normalResult = normalLoader.abbreviateOperationId(name, maxLength)
+      const disabledResult = disabledLoader.abbreviateOperationId(name, maxLength)
+      
+      // Normal mode should split numbers from letters and apply abbreviations
+      // "web3ApiController" -> "web", "3", "Api", "Controller" -> "web", "3" (Controller removed as common word)
+      expect(normalResult).toBe("web-3")
+      // Disabled mode should preserve number-letter combinations
+      expect(disabledResult).toBe("web3-api-controller")
+      
+      isValidToolName(normalResult)
+      isValidToolName(disabledResult)
+    })
+
+    it("should produce different hashes for slightly different long names", () => {
+      const name1 = "ThisIsAnExtremelyLongNameThatWillBeTruncatedAndHashedPartOneService"
+      const name2 = "ThisIsAnExtremelyLongNameThatWillBeTruncatedAndHashedPartTwoService"
+      const result1 = openAPILoader.abbreviateOperationId(name1, maxLength)
+      const result2 = openAPILoader.abbreviateOperationId(name2, maxLength)
+      expect(result1).not.toBe(result2)
+      expect(result1.slice(-4)).not.toBe(result2.slice(-4)) // Check hash part is different
+      isValidToolName(result1)
+      isValidToolName(result2)
+    })
+
+    it("should handle name that is exactly maxLength", () => {
+      const name = "a".repeat(maxLength)
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toBe(name)
+      isValidToolName(result)
+    })
+
+    it("should handle name that is maxLength + 1", () => {
+      const name = "a".repeat(maxLength + 1)
+      const result = openAPILoader.abbreviateOperationId(name, maxLength)
+      expect(result).toMatch(/^[a-z0-9-]+-[a-f0-9]{4}$/) // Expect hash
+      isValidToolName(result)
+    })
+  })
 })
