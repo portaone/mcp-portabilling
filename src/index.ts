@@ -7,7 +7,7 @@ import { loadConfig } from "./config"
 import { StreamableHttpServerTransport } from "./transport/StreamableHttpServerTransport"
 
 /**
- * Main entry point
+ * Main entry point for CLI usage
  */
 async function main(): Promise<void> {
   try {
@@ -38,8 +38,10 @@ async function main(): Promise<void> {
   }
 }
 
-// Start the server
-main()
+// Only run main() if this file is executed directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main()
+}
 
 // Re-export important classes for library usage
 export * from "./server"
@@ -47,4 +49,8 @@ export * from "./api-client"
 export * from "./config"
 export * from "./tools-manager"
 export * from "./openapi-loader"
+export * from "./auth-provider"
 export * from "./transport/StreamableHttpServerTransport"
+
+// Export the main function for programmatic usage
+export { main }

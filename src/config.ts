@@ -1,5 +1,6 @@
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
+import { AuthProvider } from "./auth-provider.js"
 
 export interface OpenAPIMCPServerConfig {
   name: string
@@ -11,6 +12,8 @@ export interface OpenAPIMCPServerConfig {
   /** Inline spec content when using 'inline' method */
   inlineSpecContent?: string
   headers?: Record<string, string>
+  /** AuthProvider for dynamic authentication (takes precedence over headers) */
+  authProvider?: AuthProvider
   transportType: "stdio" | "http"
   httpPort?: number
   httpHost?: string
@@ -24,7 +27,7 @@ export interface OpenAPIMCPServerConfig {
   /** Filter only specific HTTP methods: get,post,put,... */
   includeOperations?: string[]
   /** Tools loading mode: 'all' or 'dynamic' */
-  toolsMode: "all" | "dynamic"
+  toolsMode: "all" | "dynamic" | "explicit"
   disableAbbreviation?: boolean
 }
 
@@ -101,8 +104,8 @@ export function loadConfig(): OpenAPIMCPServerConfig {
     })
     .option("tools", {
       type: "string",
-      choices: ["all", "dynamic"],
-      description: "Which tools to load: all or dynamic meta-tools",
+      choices: ["all", "dynamic", "explicit"],
+      description: "Which tools to load: all, dynamic meta-tools, or explicit (only includeTools)",
     })
     .option("tool", {
       type: "array",
@@ -214,7 +217,7 @@ export function loadConfig(): OpenAPIMCPServerConfig {
     includeTags: argv.tag as string[] | undefined,
     includeResources: argv.resource as string[] | undefined,
     includeOperations: argv.operation as string[] | undefined,
-    toolsMode: (argv.tools as "all" | "dynamic") || process.env.TOOLS_MODE || "all",
+    toolsMode: (argv.tools as "all" | "dynamic" | "explicit") || process.env.TOOLS_MODE || "all",
     disableAbbreviation: disableAbbreviation ? true : undefined,
   }
 }

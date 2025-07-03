@@ -1,7 +1,8 @@
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
-import { OpenAPISpecLoader } from "./openapi-loader"
+import { OpenAPISpecLoader, ExtendedTool } from "./openapi-loader"
 import { OpenAPIMCPServerConfig } from "./config"
 import { OpenAPIV3 } from "openapi-types"
+import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
 
 /**
  * Manages the tools available in the MCP server
@@ -80,7 +81,40 @@ export class ToolsManager {
       this.tools = this.createDynamicTools()
       return
     }
-    // Load and filter standard tools
+
+    if (this.config.toolsMode === "explicit") {
+      // Only load tools explicitly listed in includeTools
+      const rawTools = this.specLoader.parseOpenAPISpec(spec)
+      const filtered = new Map<string, Tool>()
+
+      if (this.config.includeTools && this.config.includeTools.length > 0) {
+        const includeToolsLower = this.config.includeTools.map((t) => t.toLowerCase())
+
+        for (const [toolId, tool] of rawTools.entries()) {
+          const toolIdLower = toolId.toLowerCase()
+          const toolNameLower = tool.name.toLowerCase()
+
+          // Include tool if it matches by ID or name
+          if (
+            includeToolsLower.includes(toolIdLower) ||
+            includeToolsLower.includes(toolNameLower)
+          ) {
+            filtered.set(toolId, tool)
+          }
+        }
+      }
+      // If includeTools is empty or undefined, no tools are loaded in explicit mode
+
+      this.tools = filtered
+
+      // Log the registered tools
+      for (const [toolId, tool] of this.tools.entries()) {
+        console.error(`Registered tool: ${toolId} (${tool.name})`)
+      }
+      return
+    }
+
+    // Load and filter standard tools (for "all" mode)
     const rawTools = this.specLoader.parseOpenAPISpec(spec)
     const filtered = new Map<string, Tool>()
 
@@ -88,17 +122,14 @@ export class ToolsManager {
     const includeToolsLower = this.config.includeTools?.map((t) => t.toLowerCase()) || []
     const includeOperationsLower =
       this.config.includeOperations?.map((op) => op.toLowerCase()) || []
-    const includeResourcesLower = this.config.includeResources || []
+    const includeResourcesLower =
+      this.config.includeResources?.map((res) => res.toLowerCase()) || []
     const includeTagsLower = this.config.includeTags?.map((tag) => tag.toLowerCase()) || []
 
-    // Convert resource paths to lowercase for case-insensitive matching
-    const resourcePathsLower = includeResourcesLower.map((res) => ({
-      exact: `/${res}`.toLowerCase(),
-      prefix: `/${res}/`.toLowerCase(),
-    }))
-
     for (const [toolId, tool] of rawTools.entries()) {
-      // includeTools filter
+      const extendedTool = tool as ExtendedTool
+
+      // includeTools filter - takes highest priority
       if (includeToolsLower.length > 0) {
         const toolIdLower = toolId.toLowerCase()
         const toolNameLower = tool.name.toLowerCase()
@@ -108,41 +139,44 @@ export class ToolsManager {
         ) {
           continue
         }
+        // If tool is explicitly included, skip other filters and add it
+        filtered.set(toolId, tool)
+        continue
       }
 
       // includeOperations filter
       if (includeOperationsLower.length > 0) {
-        const { method } = this.parseToolId(toolId)
-        if (!includeOperationsLower.includes(method.toLowerCase())) {
+        const httpMethod =
+          typeof extendedTool.httpMethod === "string"
+            ? extendedTool.httpMethod.toLowerCase()
+            : undefined
+        if (!httpMethod || !includeOperationsLower.includes(httpMethod)) {
           continue
         }
       }
 
       // includeResources filter
-      if (resourcePathsLower.length > 0) {
-        const { path } = this.parseToolId(toolId)
-        const pathLower = path.toLowerCase()
-        // Match exact resource prefix (after leading slash) - case insensitive
-        const match = resourcePathsLower.some(
-          (res) => pathLower === res.exact || pathLower.startsWith(res.prefix),
-        )
-        if (!match) continue
+      if (includeResourcesLower.length > 0) {
+        const resourceName =
+          typeof extendedTool.resourceName === "string"
+            ? extendedTool.resourceName.toLowerCase()
+            : undefined
+        if (!resourceName || !includeResourcesLower.includes(resourceName)) {
+          continue
+        }
       }
 
       // includeTags filter
       if (includeTagsLower.length > 0) {
-        // Attempt to read tags from original spec paths
-        const { method, path } = this.parseToolId(toolId)
-        const methodLower = method.toLowerCase() as OpenAPIV3.HttpMethods
-        const pathItem = spec.paths[path] as OpenAPIV3.PathItemObject | undefined
-
-        if (!pathItem) continue
-
-        // Get the operation for the method (get, post, etc.)
-        const opObj = pathItem[methodLower]
-        const tags: string[] = Array.isArray(opObj?.tags) ? (opObj.tags as string[]) : []
-        if (!tags.some((tag) => includeTagsLower.includes(tag.toLowerCase()))) continue
+        const toolTags = Array.isArray(extendedTool.tags) ? extendedTool.tags : []
+        const hasMatchingTag = toolTags.some(
+          (tag) => typeof tag === "string" && includeTagsLower.includes(tag.toLowerCase()),
+        )
+        if (!hasMatchingTag) {
+          continue
+        }
       }
+
       filtered.set(toolId, tool)
     }
     this.tools = filtered
@@ -193,10 +227,11 @@ export class ToolsManager {
 
   /**
    * Get the path and method from a tool ID
+   *
+   * Note: This converts hyphens back to slashes to reconstruct the original API path.
+   * This is consistent with ApiClient.parseToolId() which needs the actual path for HTTP requests.
    */
   parseToolId(toolId: string): { method: string; path: string } {
-    const [method, ...pathParts] = toolId.split("-")
-    const path = "/" + pathParts.join("/").replace(/-/g, "/")
-    return { method, path }
+    return parseToolIdUtil(toolId)
   }
 }

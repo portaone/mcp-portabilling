@@ -3,7 +3,24 @@ import { readFile } from "fs/promises"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import yaml from "js-yaml"
 import crypto from "crypto"
-import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./abbreviations.js"
+import { REVISED_COMMON_WORDS_TO_REMOVE, WORD_ABBREVIATIONS } from "./utils/abbreviations.js"
+import { generateToolId } from "./utils/tool-id.js"
+
+/**
+ * Extended Tool interface with metadata for filtering
+ * This extends the standard MCP Tool interface with additional properties
+ * that are computed during tool creation to optimize filtering operations
+ */
+export interface ExtendedTool extends Tool {
+  /** OpenAPI tags associated with this tool's operation */
+  tags?: string[]
+  /** HTTP method for this tool (GET, POST, etc.) */
+  httpMethod?: string
+  /** Primary resource name extracted from the path */
+  resourceName?: string
+  /** Original OpenAPI path before toolId conversion */
+  originalPath?: string
+}
 
 /**
  * Spec input method type
@@ -167,10 +184,103 @@ export class OpenAPISpecLoader {
         visited.add(name)
         return this.inlineSchema(comp, components, visited)
       }
+      // External references or malformed refs - return empty schema
+      return {} as OpenAPIV3.SchemaObject
     }
 
     // We know it's a SchemaObject now since ReferenceObject only has $ref
     const schemaObj = schema as OpenAPIV3.SchemaObject
+
+    // Handle schema composition keywords
+    if (schemaObj.allOf) {
+      // For allOf, merge all schemas into a single object schema
+      const mergedSchema: OpenAPIV3.SchemaObject = {
+        type: "object",
+        properties: {},
+        required: [],
+      }
+
+      for (const subSchema of schemaObj.allOf) {
+        const inlinedSubSchema = this.inlineSchema(
+          subSchema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+          components,
+          new Set(visited),
+        )
+
+        // Merge properties
+        if (inlinedSubSchema.properties) {
+          mergedSchema.properties = {
+            ...mergedSchema.properties,
+            ...inlinedSubSchema.properties,
+          }
+        }
+
+        // Merge required arrays
+        if (inlinedSubSchema.required) {
+          mergedSchema.required = [...(mergedSchema.required || []), ...inlinedSubSchema.required]
+        }
+
+        // Copy other properties from the first schema that has them
+        for (const [key, value] of Object.entries(inlinedSubSchema)) {
+          if (key !== "properties" && key !== "required" && !(key in mergedSchema)) {
+            ;(mergedSchema as any)[key] = value
+          }
+        }
+      }
+
+      // Remove empty required array
+      if (mergedSchema.required && mergedSchema.required.length === 0) {
+        delete mergedSchema.required
+      }
+
+      return mergedSchema
+    }
+
+    if (schemaObj.oneOf) {
+      // For oneOf, preserve the composition but inline nested schemas
+      const inlinedOneOf = schemaObj.oneOf.map((subSchema) =>
+        this.inlineSchema(
+          subSchema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+          components,
+          new Set(visited),
+        ),
+      )
+
+      return {
+        ...schemaObj,
+        oneOf: inlinedOneOf,
+      }
+    }
+
+    if (schemaObj.anyOf) {
+      // For anyOf, preserve the composition but inline nested schemas
+      const inlinedAnyOf = schemaObj.anyOf.map((subSchema) =>
+        this.inlineSchema(
+          subSchema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+          components,
+          new Set(visited),
+        ),
+      )
+
+      return {
+        ...schemaObj,
+        anyOf: inlinedAnyOf,
+      }
+    }
+
+    if (schemaObj.not) {
+      // For not, inline the nested schema
+      const inlinedNot = this.inlineSchema(
+        schemaObj.not as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+        components,
+        new Set(visited),
+      )
+
+      return {
+        ...schemaObj,
+        not: inlinedNot,
+      }
+    }
 
     // Inline object schemas
     if (schemaObj.type === "object" && schemaObj.properties) {
@@ -182,19 +292,20 @@ export class OpenAPISpecLoader {
           new Set(visited),
         )
       }
-      return { ...schemaObj, properties: newProps } as OpenAPIV3.SchemaObject
+      return { ...schemaObj, properties: newProps }
     }
+
     // Inline array schemas
     if (schemaObj.type === "array" && schemaObj.items) {
-      return {
-        ...schemaObj,
-        items: this.inlineSchema(
-          schemaObj.items as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
-          components,
-          new Set(visited),
-        ),
-      } as OpenAPIV3.SchemaObject
+      const inlinedItems = this.inlineSchema(
+        schemaObj.items as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+        components,
+        new Set(visited),
+      )
+      return { ...schemaObj, items: inlinedItems }
     }
+
+    // For primitive types or schemas without nested references, return as-is
     return schemaObj
   }
 
@@ -255,6 +366,31 @@ export class OpenAPISpecLoader {
   }
 
   /**
+   * Extract the primary resource name from an OpenAPI path
+   * Examples:
+   * - "/users" -> "users"
+   * - "/users/{id}" -> "users"
+   * - "/api/v1/users/{id}/posts" -> "posts"
+   * - "/health" -> "health"
+   */
+  private extractResourceName(path: string): string | undefined {
+    // Remove leading slash and split by slash
+    const segments = path.replace(/^\//, "").split("/")
+
+    // Find the last segment that doesn't contain parameter placeholders
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const segment = segments[i]
+      // Skip parameter placeholders like {id}, {userId}, etc.
+      if (!segment.includes("{") && !segment.includes("}") && segment.length > 0) {
+        return segment
+      }
+    }
+
+    // If no non-parameter segment found, return the first segment
+    return segments[0] || undefined
+  }
+
+  /**
    * Parse an OpenAPI specification into a map of tools
    */
   parseOpenAPISpec(spec: OpenAPIV3.Document): Map<string, Tool> {
@@ -263,6 +399,47 @@ export class OpenAPISpecLoader {
     // Convert each OpenAPI path to an MCP tool
     for (const [path, pathItem] of Object.entries(spec.paths)) {
       if (!pathItem) continue
+
+      // Extract path-level parameters for inheritance
+      const pathLevelParameters: OpenAPIV3.ParameterObject[] = []
+      if (pathItem.parameters) {
+        for (const param of pathItem.parameters) {
+          let paramObj: OpenAPIV3.ParameterObject | undefined
+
+          // Handle parameter references
+          if ("$ref" in param && typeof param.$ref === "string") {
+            const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
+            if (refMatch && spec.components?.parameters) {
+              const paramNameFromRef = refMatch[1]
+              const resolvedParam = spec.components.parameters[paramNameFromRef]
+
+              if (resolvedParam && "name" in resolvedParam && "in" in resolvedParam) {
+                paramObj = resolvedParam as OpenAPIV3.ParameterObject
+              } else {
+                console.warn(
+                  `Could not resolve path-level parameter reference or invalid structure: ${param.$ref}`,
+                )
+                continue
+              }
+            } else {
+              console.warn(`Could not parse path-level parameter reference: ${param.$ref}`)
+              continue
+            }
+          } else if ("name" in param && "in" in param) {
+            paramObj = param as OpenAPIV3.ParameterObject
+          } else {
+            console.warn(
+              "Skipping path-level parameter due to missing 'name' or 'in' properties and not being a valid $ref:",
+              param,
+            )
+            continue
+          }
+
+          if (paramObj) {
+            pathLevelParameters.push(paramObj)
+          }
+        }
+      }
 
       for (const [method, operation] of Object.entries(pathItem)) {
         if (method === "parameters" || !operation) continue
@@ -278,37 +455,52 @@ export class OpenAPISpecLoader {
         }
 
         const op = operation as OpenAPIV3.OperationObject
-        const cleanPath = path.replace(/^\//, "").replace(/\{([^}]+)\}/g, "$1")
-        const toolId = `${method.toUpperCase()}-${cleanPath}`.replace(/[^a-zA-Z0-9-]/g, "-")
+        const toolId = generateToolId(method, path)
 
-        let nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
+        const nameSource = op.operationId || op.summary || `${method.toUpperCase()} ${path}`
         const name = this.abbreviateOperationId(nameSource)
 
-        const tool: Tool = {
+        const tool: ExtendedTool = {
           name,
           description: op.description || `Make a ${method.toUpperCase()} request to ${path}`,
           inputSchema: {
             type: "object",
             properties: {},
           },
+          // Add metadata for filtering
+          tags: op.tags || [],
+          httpMethod: method.toUpperCase(),
+          resourceName: this.extractResourceName(path),
+          originalPath: path,
         }
+
+        // Store the original path for API client use (backward compatibility)
+        ;(tool as any)["x-original-path"] = path
 
         // Gather all required property names
         const requiredParams: string[] = []
 
-        // Merge parameters into inputSchema
+        // Create a map to track parameters by name+in for override logic
+        const parameterMap = new Map<string, OpenAPIV3.ParameterObject>()
+
+        // First, add path-level parameters
+        for (const pathParam of pathLevelParameters) {
+          const key = `${pathParam.name}::${pathParam.in}`
+          parameterMap.set(key, pathParam)
+        }
+
+        // Then, add operation-level parameters (these can override path-level ones)
         if (op.parameters) {
           for (const param of op.parameters) {
-            let paramObj: OpenAPIV3.ParameterObject | undefined // To hold the (potentially resolved) parameter
+            let paramObj: OpenAPIV3.ParameterObject | undefined
 
-            // Handle parameter references by resolving them
+            // Handle parameter references
             if ("$ref" in param && typeof param.$ref === "string") {
               const refMatch = param.$ref.match(/^#\/components\/parameters\/(.+)$/)
               if (refMatch && spec.components?.parameters) {
                 const paramNameFromRef = refMatch[1]
                 const resolvedParam = spec.components.parameters[paramNameFromRef]
 
-                // Ensure resolvedParam is a ParameterObject
                 if (resolvedParam && "name" in resolvedParam && "in" in resolvedParam) {
                   paramObj = resolvedParam as OpenAPIV3.ParameterObject
                 } else {
@@ -322,10 +514,8 @@ export class OpenAPISpecLoader {
                 continue
               }
             } else if ("name" in param && "in" in param) {
-              // Direct parameter object
               paramObj = param as OpenAPIV3.ParameterObject
             } else {
-              // This case implies an invalid parameter structure that isn't a $ref and isn't a valid direct parameter.
               console.warn(
                 "Skipping parameter due to missing 'name' or 'in' properties and not being a valid $ref:",
                 param,
@@ -333,49 +523,50 @@ export class OpenAPISpecLoader {
               continue
             }
 
-            // If paramObj is still undefined here, it means the parameter could not be processed.
-            if (!paramObj) {
-              // This should theoretically be caught by the continue statements above.
-              console.warn("Failed to process a parameter (paramObj is undefined):", param)
-              continue
+            if (paramObj) {
+              const key = `${paramObj.name}::${paramObj.in}`
+              parameterMap.set(key, paramObj) // This will override path-level parameters
+            }
+          }
+        }
+
+        // Process all parameters (path-level + operation-level, with operation-level taking precedence)
+        for (const paramObj of parameterMap.values()) {
+          if (paramObj.schema) {
+            // Get the fully inlined schema with all nested references resolved
+            const paramSchema = this.inlineSchema(
+              paramObj.schema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
+              spec.components?.schemas,
+              new Set<string>(),
+            )
+
+            // Create the parameter definition
+            const paramDef: any = {
+              description: paramObj.description || `${paramObj.name} parameter`,
+              "x-parameter-location": paramObj.in, // Store parameter location (path, query, etc.)
             }
 
-            if (paramObj.schema) {
-              // Get the fully inlined schema with all nested references resolved
-              const paramSchema = this.inlineSchema(
-                paramObj.schema as OpenAPIV3.SchemaObject | OpenAPIV3.ReferenceObject,
-                spec.components?.schemas,
-                new Set<string>(),
-              )
+            // Determine and set the appropriate type
+            const paramType = this.determineParameterType(paramSchema, paramObj.name)
+            if (paramType !== undefined) {
+              paramDef.type = paramType
+            }
 
-              // Create the parameter definition
-              const paramDef: any = {
-                description: paramObj.description || `${paramObj.name} parameter`,
-                "x-parameter-location": paramObj.in, // Store parameter location (path, query, etc.)
+            // Copy all other relevant properties from the inlined schema to paramDef
+            // Avoid overwriting already set 'description' or 'type' unless schema has them.
+            if (typeof paramSchema === "object" && paramSchema !== null) {
+              for (const [key, value] of Object.entries(paramSchema)) {
+                if (key === "description" && paramDef.description) continue // Keep existing if already set
+                if (key === "type" && paramDef.type) continue // Keep existing if already set
+                paramDef[key] = value
               }
+            }
 
-              // Determine and set the appropriate type
-              const paramType = this.determineParameterType(paramSchema, paramObj.name)
-              if (paramType !== undefined) {
-                paramDef.type = paramType
-              }
+            // Add the schema to the tool's input schema properties
+            tool.inputSchema.properties![paramObj.name] = paramDef
 
-              // Copy all other relevant properties from the inlined schema to paramDef
-              // Avoid overwriting already set 'description' or 'type' unless schema has them.
-              if (typeof paramSchema === "object" && paramSchema !== null) {
-                for (const [key, value] of Object.entries(paramSchema)) {
-                  if (key === "description" && paramDef.description) continue // Keep existing if already set
-                  if (key === "type" && paramDef.type) continue // Keep existing if already set
-                  paramDef[key] = value
-                }
-              }
-
-              // Add the schema to the tool's input schema properties
-              tool.inputSchema.properties![paramObj.name] = paramDef
-
-              if (paramObj.required === true) {
-                requiredParams.push(paramObj.name)
-              }
+            if (paramObj.required === true) {
+              requiredParams.push(paramObj.name)
             }
           }
         }
@@ -403,8 +594,32 @@ export class OpenAPISpecLoader {
               new Set<string>(),
             )
 
-            // Include all properties from inlinedSchema for object, else use body wrapper
-            if (inlinedSchema.type === "object" && inlinedSchema.properties) {
+            // Handle different schema types appropriately
+            if (inlinedSchema.oneOf || inlinedSchema.anyOf) {
+              // For oneOf/anyOf schemas, preserve them at the top level of inputSchema
+              // We need to merge with existing properties if any
+              const existingProperties = tool.inputSchema.properties || {}
+              const hasExistingProperties = Object.keys(existingProperties).length > 0
+
+              if (hasExistingProperties) {
+                // If we already have properties from parameters, we need to create an allOf
+                // that combines the existing object schema with the oneOf/anyOf
+                const objectSchema: any = {
+                  type: "object",
+                  properties: existingProperties,
+                }
+                if (tool.inputSchema.required) {
+                  objectSchema.required = tool.inputSchema.required
+                }
+
+                tool.inputSchema = {
+                  allOf: [objectSchema, inlinedSchema],
+                } as any
+              } else {
+                // No existing properties, so we can use the oneOf/anyOf directly
+                tool.inputSchema = inlinedSchema as any
+              }
+            } else if (inlinedSchema.type === "object" && inlinedSchema.properties) {
               // Handle object properties
               for (const [propName, propSchema] of Object.entries(inlinedSchema.properties)) {
                 const paramName = tool.inputSchema.properties![propName]
@@ -418,7 +633,7 @@ export class OpenAPISpecLoader {
                 }
               }
             } else {
-              // Use body wrapper for non-object schemas
+              // Use body wrapper for other non-object schemas (primitives, arrays, etc.)
               tool.inputSchema.properties!["body"] = inlinedSchema
               requiredParams.push("body")
             }

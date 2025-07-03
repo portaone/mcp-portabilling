@@ -1,0 +1,21 @@
+{
+  "name": "auth-provider-mcp-example",
+  "version": "1.0.0",
+  "description": "Example showing AuthProvider usage with mcp-openapi-server",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ivotoby/openapi-mcp-server": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
