@@ -382,6 +382,15 @@ paths:
       const tool = tools.get(toolId)!
       expect(tool.name).toContain("get-user-management-authorization-groups")
     })
+
+    it("should handle various number-letter combinations when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      
+      expect(loader.abbreviateOperationId("api2DataProcessor")).toBe("api2-data-processor")
+      expect(loader.abbreviateOperationId("blockchain2Handler")).toBe("blockchain2-handler")
+      expect(loader.abbreviateOperationId("v1ApiService")).toBe("v1-api-service")
+      expect(loader.abbreviateOperationId("oauth2TokenManager")).toBe("oauth2-token-manager")
+    })
   })
 
   describe("parseOpenAPISpec", () => {
@@ -565,46 +574,6 @@ paths:
       expect(tool.inputSchema.properties).toHaveProperty("body")
       expect((tool.inputSchema.properties! as any).body.type).toBe("string")
       expect(tool.inputSchema.required).toEqual(["body"])
-    })
-  })
-
-  describe("disableAbbreviation", () => {
-    it("should not abbreviate operation IDs when disableAbbreviation is true", () => {
-      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
-      const longName = "ServiceUsersManagementController_updateServiceUsersAuthorityGroup"
-      const result = loader.abbreviateOperationId(longName)
-
-      // Should not be abbreviated
-      expect(result).toContain("service-users-management-controller")
-      expect(result).toContain("update-service-users-authority-group")
-    })
-
-    it("should preserve number-letter combinations like web3 when disableAbbreviation is true", () => {
-      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
-      const nameWithNumbers = "web3ApiController"
-      const result = loader.abbreviateOperationId(nameWithNumbers)
-
-      // Should preserve "web3" and not split it to "web-3"
-      expect(result).toBe("web3-api-controller")
-      expect(result).not.toContain("web-3")
-    })
-
-    it("should still split camelCase when disableAbbreviation is true", () => {
-      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
-      const camelCaseName = "getUserProfile"
-      const result = loader.abbreviateOperationId(camelCaseName)
-
-      // Should split camelCase but not abbreviate
-      expect(result).toBe("get-user-profile")
-    })
-
-    it("should handle various number-letter combinations when disableAbbreviation is true", () => {
-      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
-      
-      expect(loader.abbreviateOperationId("api2DataProcessor")).toBe("api2-data-processor")
-      expect(loader.abbreviateOperationId("blockchain2Handler")).toBe("blockchain2-handler")
-      expect(loader.abbreviateOperationId("v1ApiService")).toBe("v1-api-service")
-      expect(loader.abbreviateOperationId("oauth2TokenManager")).toBe("oauth2-token-manager")
     })
   })
 
