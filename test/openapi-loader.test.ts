@@ -846,6 +846,25 @@ paths:
       expect(result).toContain("service-users-management-controller")
       expect(result).toContain("update-service-users-authority-group")
     })
+
+    it("should preserve number-letter combinations like web3 when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const nameWithNumbers = "web3ApiController"
+      const result = loader.abbreviateOperationId(nameWithNumbers)
+
+      // Should preserve "web3" and not split it to "web-3"
+      expect(result).toBe("web3-api-controller")
+      expect(result).not.toContain("web-3")
+    })
+
+    it("should still split camelCase when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      const camelCaseName = "getUserProfile"
+      const result = loader.abbreviateOperationId(camelCaseName)
+
+      // Should split camelCase but not abbreviate
+      expect(result).toBe("get-user-profile")
+    })
   })
 
   describe("abbreviateOperationId", () => {
