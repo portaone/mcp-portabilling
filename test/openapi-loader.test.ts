@@ -382,6 +382,15 @@ paths:
       const tool = tools.get(toolId)!
       expect(tool.name).toContain("get-user-management-authorization-groups")
     })
+
+    it("should handle various number-letter combinations when disableAbbreviation is true", () => {
+      const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
+      
+      expect(loader.abbreviateOperationId("api2DataProcessor")).toBe("api2-data-processor")
+      expect(loader.abbreviateOperationId("blockchain2Handler")).toBe("blockchain2-handler")
+      expect(loader.abbreviateOperationId("v1ApiService")).toBe("v1-api-service")
+      expect(loader.abbreviateOperationId("oauth2TokenManager")).toBe("oauth2-token-manager")
+    })
   })
 
   describe("parseOpenAPISpec", () => {

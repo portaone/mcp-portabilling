@@ -677,6 +677,25 @@ export class OpenAPISpecLoader {
     return combinedParts.map((p) => p.trim()).filter((p) => p.length > 0)
   }
 
+  // Helper to split only by underscore and camelCase, but not by numbers
+  // Used when abbreviation is disabled to preserve number-letter combinations like "web3"
+  private splitCombinedWithoutNumbers(input: string): string[] {
+    // Split by underscore first
+    const underscoreParts = input.split("_")
+    let combinedParts: string[] = []
+
+    underscoreParts.forEach((part) => {
+      // Add space before uppercase letters (camelCase) but NOT before/after numbers
+      const spacedPart = part
+        .replace(/([A-Z]+)/g, " $1") // Handles sequences of uppercase like "MYID"
+        .replace(/([A-Z][a-z])/g, " $1") // Handles regular camelCase like "MyIdentifier"
+
+      const splitParts = spacedPart.split(" ").filter((p) => p.length > 0)
+      combinedParts = combinedParts.concat(splitParts)
+    })
+    return combinedParts.map((p) => p.trim()).filter((p) => p.length > 0)
+  }
+
   private _initialSanitizeAndValidate(
     originalId: string,
     maxLength: number,
@@ -798,7 +817,8 @@ export class OpenAPISpecLoader {
 
     let processedName
     if (this.disableAbbreviation) {
-      processedName = this.splitCombined(sanitizedName).join("-")
+      // When abbreviation is disabled, split combined words but preserve number-letter combinations
+      processedName = this.splitCombinedWithoutNumbers(sanitizedName).join("-")
     } else {
       processedName = this._performSemanticAbbreviation(sanitizedName)
       processedName = this._applyVowelRemovalIfOverLength(processedName, maxLength)
