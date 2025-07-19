@@ -66,8 +66,6 @@ describe("Issue #34 Regression Test - Dot Removal in Endpoint Paths", () => {
 
     // Test case 2: Find the correct tool ID that should preserve dots
     const allTools = Array.from(tools.keys())
-    console.log("Generated tool IDs:", allTools)
-
     // After fix: We expect to find tool IDs that preserve dots
     const dotPreservingToolIds = allTools.filter(
       (id) =>
