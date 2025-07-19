@@ -142,12 +142,12 @@ describe("Issue #34 Regression Test - Dot Removal in Endpoint Paths", () => {
     expect(toolIds.length).toBe(1)
 
     const toolId = toolIds[0]
-    console.log("Generated tool ID:", toolId)
+    // Removed debug logging for tool ID
 
     await mockApiClient.executeApiCall(toolId, {})
 
     expect(capturedConfig).toBeDefined()
-    console.log("Actual URL called:", capturedConfig.url)
+    // Removed debug logging for actual URL
 
     // After fix: "1.0/test" should remain as "1.0/test"
     expect(capturedConfig.url).toBe("/1.0/test") // Fixed behavior - dots preserved
