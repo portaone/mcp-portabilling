@@ -828,7 +828,7 @@ describe("Tool ID Utilities", () => {
   })
 })
 
-// New test section for PR #38 review comment issues
+// New test section addressing issue #33, incorporating review comments from PR #38
 describe("PR #38 Review Comment Edge Cases", () => {
   describe("Sanitization Issues with Consecutive Hyphens", () => {
     it("should preserve legitimate triple hyphens in path segments", () => {
