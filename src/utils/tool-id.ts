@@ -34,16 +34,17 @@ export function parseToolId(toolId: string): { method: string; path: string } {
 /**
  * Sanitize a string to contain only safe characters for tool IDs
  *
- * Removes or replaces characters that are not alphanumeric, underscores, or hyphens.
+ * Removes or replaces characters that are not alphanumeric, underscores, hyphens, or dots.
  * This ensures consistent and safe ID formatting while preserving double underscores
  * which are used as path separators and triple-dash markers for path parameters.
+ * Dots are preserved to maintain version numbers and decimal values in API paths.
  *
  * @param input - String to sanitize
- * @returns Sanitized string containing only [A-Za-z0-9_-]
+ * @returns Sanitized string containing only [A-Za-z0-9_.-]
  */
 function sanitizeForToolId(input: string): string {
   let result = input
-    .replace(/[^A-Za-z0-9_-]/g, "") // Remove any character not in the allowed set
+    .replace(/[^A-Za-z0-9_.-]/g, "") // Remove any character not in the allowed set (now includes dots)
     .replace(/_{3,}/g, "__") // Collapse 3+ consecutive underscores to double underscore (preserve path separators)
 
   // Handle hyphen sequences more carefully to preserve legitimate triple-hyphen markers
