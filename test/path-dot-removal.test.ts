@@ -86,7 +86,6 @@ describe("Issue #34 Regression Test - Dot Removal in Endpoint Paths", () => {
       const config = capturedConfigs[0]
 
       // The issue: URLs should preserve dots but currently don't
-      console.log(`Tool ID: ${toolId} -> URL: ${config.url}`)
 
       // After fix - dots should be preserved in the path
       if (toolId.includes("1.0")) {
