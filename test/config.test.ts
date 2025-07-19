@@ -39,6 +39,25 @@ describe("parseHeaders", () => {
       key2: "value2",
     })
   })
+
+  it("should handle header values containing colons", () => {
+    const headerStr = "Authorization:Bearer V:fffff,X-API-Key:key123"
+    const result = parseHeaders(headerStr)
+    expect(result).toEqual({
+      Authorization: "Bearer V:fffff",
+      "X-API-Key": "key123",
+    })
+  })
+
+  it("should handle multiple colons in header values", () => {
+    const headerStr =
+      "Content-Type:application/json,Authorization:Bearer token:with:multiple:colons"
+    const result = parseHeaders(headerStr)
+    expect(result).toEqual({
+      "Content-Type": "application/json",
+      Authorization: "Bearer token:with:multiple:colons",
+    })
+  })
 })
 
 describe("loadConfig", () => {

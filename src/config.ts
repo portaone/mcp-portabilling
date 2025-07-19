@@ -38,8 +38,12 @@ export function parseHeaders(headerStr?: string): Record<string, string> {
   const headers: Record<string, string> = {}
   if (headerStr) {
     headerStr.split(",").forEach((header) => {
-      const [key, value] = header.split(":")
-      if (key && value) headers[key.trim()] = value.trim()
+      const colonIndex = header.indexOf(":")
+      if (colonIndex > 0) {
+        const key = header.substring(0, colonIndex).trim()
+        const value = header.substring(colonIndex + 1).trim()
+        if (key && value) headers[key] = value
+      }
     })
   }
   return headers
