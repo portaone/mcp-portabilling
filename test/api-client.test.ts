@@ -389,7 +389,7 @@ describe("Issue #33 Regression Test", () => {
  * handle these markers correctly.
  */
 
-// Tests for PR #38 review comment edge cases
+// Tests for Issue #33 and PR #38 review comment edge cases
 describe("PR #38 Review Comment Fixes", () => {
   describe("Parameter Matching Precision in API Client", () => {
     it("should not partially match parameter names that are substrings of path segments", async () => {
