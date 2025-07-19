@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
-import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
+import { parseToolId as parseToolIdUtil, generateToolId } from "./utils/tool-id.js"
 import { OpenAPISpecLoader } from "./openapi-loader.js"
 import { OpenAPIV3 } from "openapi-types"
 
@@ -440,7 +440,7 @@ export class ApiClient {
 
     // If method is specified, construct the tool ID directly
     if (method) {
-      const toolId = `${method.toUpperCase()}::${endpoint.replace(/^\//, "").replace(/\//g, "__")}`
+      const toolId = generateToolId(method, endpoint)
 
       // Check if this tool exists in our toolsMap or if we can derive it from the OpenAPI spec
       if (this.toolsMap.has(toolId)) {
