@@ -186,4 +186,66 @@ describe("ApiClient Dynamic Meta-Tools", () => {
       })
     })
   })
+
+  it("should provide specific error messages for GET-API-ENDPOINT-SCHEMA with missing endpoint", async () => {
+    const tools = new Map([
+      [
+        "GET-API-ENDPOINT-SCHEMA",
+        {
+          name: "get-api-endpoint-schema",
+          description: "Get schema",
+          inputSchema: { type: "object" as const, properties: {} },
+        } as any,
+      ],
+    ])
+    apiClient.setTools(tools)
+
+    await expect(apiClient.executeApiCall("GET-API-ENDPOINT-SCHEMA", {})).rejects.toThrow(
+      "Missing required parameter 'endpoint' for tool 'GET-API-ENDPOINT-SCHEMA'",
+    )
+  })
+
+  it("should provide specific error messages for INVOKE-API-ENDPOINT with missing endpoint", async () => {
+    const tools = new Map([
+      [
+        "INVOKE-API-ENDPOINT",
+        {
+          name: "invoke-api-endpoint",
+          description: "Invoke endpoint",
+          inputSchema: { type: "object" as const, properties: {} },
+        } as any,
+      ],
+    ])
+    apiClient.setTools(tools)
+
+    await expect(apiClient.executeApiCall("INVOKE-API-ENDPOINT", {})).rejects.toThrow(
+      "Missing required parameter 'endpoint' for tool 'INVOKE-API-ENDPOINT'",
+    )
+  })
+
+  it("should provide specific error messages for GET-API-ENDPOINT-SCHEMA with invalid endpoint", async () => {
+    const tools = new Map([
+      [
+        "GET-API-ENDPOINT-SCHEMA",
+        {
+          name: "get-api-endpoint-schema",
+          description: "Get schema",
+          inputSchema: { type: "object" as const, properties: {} },
+        } as any,
+      ],
+    ])
+    apiClient.setTools(tools)
+
+    // Mock OpenAPI spec with no matching endpoint
+    const mockSpec = {
+      openapi: "3.0.0",
+      info: { title: "Test", version: "1.0.0" },
+      paths: {},
+    } as any
+    apiClient.setOpenApiSpec(mockSpec)
+
+    await expect(
+      apiClient.executeApiCall("GET-API-ENDPOINT-SCHEMA", { endpoint: "/invalid" }),
+    ).rejects.toThrow("No endpoint found for path '/invalid' in tool 'GET-API-ENDPOINT-SCHEMA'")
+  })
 })
