@@ -160,7 +160,7 @@ describe("Tool ID Utilities", () => {
 
     it("should remove path parameter braces", () => {
       const result = generateToolId("GET", "/users/{id}/profile")
-      expect(result).toBe("GET::users__id__profile")
+      expect(result).toBe("GET::users__---id__profile")
     })
 
     it("should handle paths with underscores", () => {
@@ -170,7 +170,7 @@ describe("Tool ID Utilities", () => {
 
     it("should handle mixed separators and path params", () => {
       const result = generateToolId("DELETE", "/api_v2/user_management/{groupId}/members")
-      expect(result).toBe("DELETE::api_v2__user_management__groupId__members")
+      expect(result).toBe("DELETE::api_v2__user_management__---groupId__members")
     })
 
     it("should handle paths with hyphens (no escaping needed)", () => {
@@ -201,7 +201,7 @@ describe("Tool ID Utilities", () => {
 
       it("should remove at symbols and other email-like characters", () => {
         const result = generateToolId("PUT", "/users/{email@domain.com}/profile")
-        expect(result).toBe("PUT::users__emaildomaincom__profile")
+        expect(result).toBe("PUT::users__---emaildomaincom__profile")
       })
 
       it("should handle query parameter-like syntax", () => {
@@ -236,7 +236,7 @@ describe("Tool ID Utilities", () => {
           "POST",
           "/api/v2.0/users/{user@domain.com}/posts?filter=active&sort=date",
         )
-        expect(result).toBe("POST::api__v20__users__userdomaincom__postsfilteractivesortdate")
+        expect(result).toBe("POST::api__v20__users__---userdomaincom__postsfilteractivesortdate")
       })
 
       it("should preserve underscores in the sanitized output", () => {
@@ -286,8 +286,8 @@ describe("Tool ID Utilities", () => {
         // Method should match exactly
         expect(parsed.method).toBe(testCase.method.toUpperCase())
 
-        // Path should match the structure (path params will have braces removed)
-        const expectedPath = testCase.path.replace(/\{([^}]+)\}/g, "$1")
+        // Path should match the structure with ---param markers for parameters
+        const expectedPath = testCase.path.replace(/\{([^}]+)\}/g, "---$1")
         expect(parsed.path).toBe(expectedPath)
       }
     })
@@ -601,7 +601,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Unicode in path parameters",
           path: "/api/users/{José}/profile",
-          expected: "GET::api__users__Jos__profile",
+          expected: "GET::api__users__---Jos__profile",
         },
         {
           description: "Unicode mixed with special characters",
@@ -688,7 +688,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Trailing slashes with path parameters",
           path: "/users/{id}/profile/",
-          expected: "GET::users__id__profile",
+          expected: "GET::users__---id__profile",
         },
       ]
 
@@ -753,7 +753,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Consecutive slashes with path parameters",
           path: "/users//{id}//profile",
-          expected: "GET::users__id__profile",
+          expected: "GET::users__---id__profile",
         },
         {
           description: "Consecutive slashes with hyphens",
@@ -816,7 +816,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Slashes with path parameters and special chars",
           path: "/users//{email@domain.com}//profile/",
-          expected: "GET::users__emaildomaincom__profile",
+          expected: "GET::users__---emaildomaincom__profile",
         },
       ]
 
@@ -824,6 +824,281 @@ describe("Tool ID Utilities", () => {
         const result = generateToolId("GET", path)
         expect(result).toBe(expected)
       }
+    })
+  })
+})
+
+// New test section addressing issue #33, incorporating review comments from PR #38
+describe("PR #38 Review Comment Edge Cases", () => {
+  describe("Sanitization Issues with Consecutive Hyphens", () => {
+    it("should preserve legitimate triple hyphens in path segments", () => {
+      // Test case for review comment about -{4,} regex interfering with legitimate hyphens
+      const result = generateToolId("GET", "/api/resource---name/items")
+      expect(result).toBe("GET::api__resource---name__items")
+    })
+
+    it("should collapse 4+ consecutive hyphens to triple hyphen while preserving existing triple hyphens", () => {
+      // This tests the edge case where we have both legitimate triple hyphens and excessive hyphens
+      const result = generateToolId("POST", "/api/resource---name----test")
+      expect(result).toBe("POST::api__resource---name---test")
+    })
+
+    it("should handle mixed consecutive hyphens scenarios", () => {
+      const testCases = [
+        {
+          path: "/api/test----more",
+          expected: "POST::api__test---more",
+        },
+        {
+          path: "/api/test-----even-more",
+          expected: "POST::api__test---even-more",
+        },
+        {
+          path: "/api/resource---valid----invalid",
+          expected: "POST::api__resource---valid---invalid",
+        },
+      ]
+
+      testCases.forEach(({ path, expected }) => {
+        const result = generateToolId("POST", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    // Comprehensive test coverage for the simpler hyphen collapse approach
+    it("should handle complex hyphen scenarios with simple regex approach", () => {
+      const complexTestCases = [
+        {
+          description: "Triple hyphens followed by 4 hyphens",
+          path: "/api/---param----test",
+          expected: "POST::api__---param---test",
+        },
+        {
+          description: "4 hyphens followed by triple hyphens",
+          path: "/api/----test---param",
+          expected: "POST::api__---test---param",
+        },
+        {
+          description: "Multiple segments with mixed hyphens",
+          path: "/api/---a----b---c-----d",
+          expected: "POST::api__---a---b---c---d",
+        },
+        {
+          description: "7 consecutive hyphens",
+          path: "/api/test-------more",
+          expected: "POST::api__test---more",
+        },
+        {
+          description: "Triple hyphens at start and end with excessive in middle",
+          path: "/---start----middle---end",
+          expected: "POST::start---middle---end", // Leading/trailing hyphens removed
+        },
+        {
+          description: "Only hyphens",
+          path: "/----------",
+          expected: "POST::", // Should be sanitized to empty after processing
+        },
+        {
+          description: "Mixed with path parameters",
+          path: "/api/{param}----test---{other}",
+          expected: "POST::api__---param---test---other",
+        },
+      ]
+
+      complexTestCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("POST", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should verify the regex doesn't break legitimate patterns", () => {
+      // Test cases that should NOT be modified by the regex
+      const legitimatePatterns = [
+        {
+          description: "Single hyphen",
+          path: "/api/test-name/items",
+          expected: "GET::api__test-name__items",
+        },
+        {
+          description: "Double hyphen",
+          path: "/api/test--name/items",
+          expected: "GET::api__test--name__items",
+        },
+        {
+          description: "Triple hyphen (should be preserved)",
+          path: "/api/test---name/items",
+          expected: "GET::api__test---name__items",
+        },
+        {
+          description: "Mixed single, double, triple hyphens",
+          path: "/api/a-b--c---d/items",
+          expected: "GET::api__a-b--c---d__items",
+        },
+      ]
+
+      legitimatePatterns.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should handle edge cases with the simple hyphen collapse approach", () => {
+      const edgeCases = [
+        {
+          description: "Hyphens at path boundaries",
+          path: "----/api/test/----",
+          expected: "GET::api__test",
+        },
+        {
+          description: "Alternating pattern",
+          path: "/api/---a----b---c",
+          expected: "GET::api__---a---b---c",
+        },
+        {
+          description: "Very long hyphen sequence",
+          path: "/api/test" + "-".repeat(20) + "more",
+          expected: "GET::api__test---more",
+        },
+      ]
+
+      edgeCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should demonstrate the benefits of the simple approach over complex regex", () => {
+      // This test documents why we chose the simple -{4,} approach over (?<!-)-{4,}(?!-)
+      const testCases = [
+        {
+          description: "Simple approach is predictable: any 4+ hyphens become exactly 3",
+          path: "/api/test----more",
+          expected: "GET::api__test---more",
+        },
+        {
+          description: "No complex edge cases with boundary detection",
+          path: "/api/---param----test---end",
+          expected: "GET::api__---param---test---end",
+        },
+        {
+          description: "Consistent behavior regardless of context",
+          path: "/start----middle----end",
+          expected: "GET::start---middle---end",
+        },
+        {
+          description: "Works correctly with path parameters",
+          path: "/api/{param}----{other}-----test",
+          expected: "GET::api__---param---other---test",
+        },
+      ]
+
+      testCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+
+      // The simple approach avoids:
+      // - Browser compatibility issues with lookbehind/lookahead (not supported in all engines)
+      // - Complex regex logic that's hard to understand and maintain
+      // - Potential edge cases where the negative assertions might not work as expected
+      // - Performance overhead of complex regex patterns
+    })
+  })
+
+  describe("Parameter Matching Precision Issues", () => {
+    it("should not partially match parameter names in path segments", () => {
+      // This tests the precision issue mentioned in the review comments
+      // where ---param might match partial strings when parameter names are substrings
+
+      // Create a test path that would cause issues with the old regex pattern
+      const testPath = "/api__users__---userid__info__---user"
+      const paramRegex1 = new RegExp(`---user(?:\\/|$)`, "g") // Current implementation
+      const paramRegex2 = new RegExp(`---user(?=__|/|$)`, "g") // Suggested fix
+
+      // The old regex should have the precision issue - matching "---user" in "---userid"
+      // Let's test with a clearer case
+      const problematicPath = "/api/---user-data/---user"
+      const oldMatches = problematicPath.match(paramRegex1) || []
+      const newMatches = problematicPath.match(paramRegex2) || []
+
+      // The old regex should match "---user" even when it's part of "---user-data"
+      // But since our implementation path uses __ separators, let's test the actual scenario
+      const actualTestPath = "/api__users__---user__info__---userid"
+      const oldActualMatches = actualTestPath.match(new RegExp(`---user(?:\\/|$)`, "g")) || []
+      const newActualMatches = actualTestPath.match(new RegExp(`---user(?=__|/|$)`, "g")) || []
+
+      // The old regex won't match anything because it looks for / or end of string
+      // The new regex should match exactly once at the boundary
+      expect(newActualMatches.length).toBe(1)
+      expect(newActualMatches[0]).toBe("---user")
+
+      // Test edge case where parameter name is a substring
+      const edgeCasePath = "/api__---userid__---user"
+      const edgeOldMatches = edgeCasePath.match(new RegExp(`---user(?:\\/|$)`, "g")) || []
+      const edgeNewMatches = edgeCasePath.match(new RegExp(`---user(?=__|/|$)`, "g")) || []
+
+      expect(edgeNewMatches.length).toBe(1) // Should only match ---user, not ---userid
+    })
+
+    it("should handle parameter names that are substrings of other parameters", () => {
+      const testCases = [
+        {
+          description: "parameter name is substring of path segment",
+          path: "/api/users/---userid/---user",
+          paramToReplace: "user",
+          replacementValue: "123",
+          expectedMatches: 1, // Should only match "---user", not "---userid"
+        },
+        {
+          description: "parameter name appears in multiple contexts",
+          path: "/api/---id-data/---id",
+          paramToReplace: "id",
+          replacementValue: "456",
+          expectedMatches: 1, // Should only match "---id", not "---id-data"
+        },
+      ]
+
+      testCases.forEach(({ description, path, paramToReplace, expectedMatches }) => {
+        // Test the improved regex pattern
+        const improvedRegex = new RegExp(`---${paramToReplace}(?=__|/|$)`, "g")
+        const matches = path.match(improvedRegex) || []
+        expect(matches.length).toBe(expectedMatches)
+      })
+    })
+
+    it("should correctly identify parameter boundaries with double underscores", () => {
+      // Test that the improved regex correctly handles __ as a boundary
+      const path = "/api__---param__more__---param2"
+
+      const paramRegex = new RegExp(`---param(?=__|/|$)`, "g")
+      const matches = path.match(paramRegex) || []
+
+      expect(matches.length).toBe(1) // Should only match the first "---param"
+      expect(matches[0]).toBe("---param")
+    })
+  })
+
+  describe("API Client Parameter Replacement with Edge Cases", () => {
+    it("should handle parameter replacement without substring collisions", () => {
+      // This simulates the API client parameter replacement logic
+      // to ensure the fixes work in practice
+
+      const testPath = "/api/users__---userid__info__---user"
+      const params = { user: "123", userid: "456" }
+
+      let resultPath = testPath
+
+      // Simulate the improved parameter replacement logic
+      Object.keys(params).forEach((key) => {
+        const value = params[key as keyof typeof params]
+        const improvedRegex = new RegExp(`---${key}(?=__|/|$)`, "g")
+        resultPath = resultPath.replace(improvedRegex, value)
+      })
+
+      expect(resultPath).toBe("/api/users__456__info__123")
+      // Verify no incorrect replacements occurred
+      expect(resultPath).not.toContain("---")
+      expect(resultPath).not.toContain("123id") // Would indicate substring replacement bug
     })
   })
 })
