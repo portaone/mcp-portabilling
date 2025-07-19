@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
 import { parseToolId as parseToolIdUtil, generateToolId } from "./utils/tool-id.js"
+import { isValidHttpMethod, isGetLikeMethod, VALID_HTTP_METHODS } from "./utils/http-methods.js"
 import { OpenAPISpecLoader } from "./openapi-loader.js"
 import { OpenAPIV3 } from "openapi-types"
 
@@ -194,7 +195,7 @@ export class ApiClient {
       }
 
       // Handle parameters based on HTTP method
-      if (["get", "delete", "head", "options"].includes(method.toLowerCase())) {
+      if (isGetLikeMethod(method)) {
         // For GET-like methods, parameters go in the query string
         config.params = this.processQueryParams(paramsCopy)
       } else {
@@ -285,11 +286,7 @@ export class ApiClient {
           if (method === "parameters" || !operation) continue
 
           // Skip invalid HTTP methods
-          if (
-            !["get", "post", "put", "patch", "delete", "options", "head"].includes(
-              method.toLowerCase(),
-            )
-          ) {
+          if (!isValidHttpMethod(method)) {
             continue
           }
 
@@ -364,11 +361,7 @@ export class ApiClient {
         if (method === "parameters" || !operation) continue
 
         // Skip invalid HTTP methods
-        if (
-          !["get", "post", "put", "patch", "delete", "options", "head"].includes(
-            method.toLowerCase(),
-          )
-        ) {
+        if (!isValidHttpMethod(method)) {
           continue
         }
 
@@ -467,7 +460,7 @@ export class ApiClient {
       const pathItem = this.openApiSpec.paths[endpoint]
       if (pathItem) {
         // Find the first available HTTP method for this path
-        for (const method of ["get", "post", "put", "patch", "delete", "options", "head"]) {
+        for (const method of VALID_HTTP_METHODS) {
           if ((pathItem as any)[method]) {
             return this.makeDirectHttpRequest(method.toUpperCase(), endpoint, endpointParams)
           }
@@ -502,7 +495,7 @@ export class ApiClient {
     }
 
     // Handle parameters based on HTTP method
-    if (["get", "delete", "head", "options"].includes(method.toLowerCase())) {
+    if (isGetLikeMethod(method)) {
       // For GET-like methods, parameters go in the query string
       config.params = this.processQueryParams(params)
     } else {
