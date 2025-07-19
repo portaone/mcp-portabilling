@@ -160,7 +160,7 @@ describe("Tool ID Utilities", () => {
 
     it("should remove path parameter braces", () => {
       const result = generateToolId("GET", "/users/{id}/profile")
-      expect(result).toBe("GET::users__id__profile")
+      expect(result).toBe("GET::users__---id__profile")
     })
 
     it("should handle paths with underscores", () => {
@@ -170,7 +170,7 @@ describe("Tool ID Utilities", () => {
 
     it("should handle mixed separators and path params", () => {
       const result = generateToolId("DELETE", "/api_v2/user_management/{groupId}/members")
-      expect(result).toBe("DELETE::api_v2__user_management__groupId__members")
+      expect(result).toBe("DELETE::api_v2__user_management__---groupId__members")
     })
 
     it("should handle paths with hyphens (no escaping needed)", () => {
@@ -201,7 +201,7 @@ describe("Tool ID Utilities", () => {
 
       it("should remove at symbols and other email-like characters", () => {
         const result = generateToolId("PUT", "/users/{email@domain.com}/profile")
-        expect(result).toBe("PUT::users__emaildomaincom__profile")
+        expect(result).toBe("PUT::users__---emaildomaincom__profile")
       })
 
       it("should handle query parameter-like syntax", () => {
@@ -236,7 +236,7 @@ describe("Tool ID Utilities", () => {
           "POST",
           "/api/v2.0/users/{user@domain.com}/posts?filter=active&sort=date",
         )
-        expect(result).toBe("POST::api__v20__users__userdomaincom__postsfilteractivesortdate")
+        expect(result).toBe("POST::api__v20__users__---userdomaincom__postsfilteractivesortdate")
       })
 
       it("should preserve underscores in the sanitized output", () => {
@@ -286,8 +286,8 @@ describe("Tool ID Utilities", () => {
         // Method should match exactly
         expect(parsed.method).toBe(testCase.method.toUpperCase())
 
-        // Path should match the structure (path params will have braces removed)
-        const expectedPath = testCase.path.replace(/\{([^}]+)\}/g, "$1")
+        // Path should match the structure (path params will have ---param markers replaced back)
+        const expectedPath = testCase.path.replace(/\{([^}]+)\}/g, "---$1")
         expect(parsed.path).toBe(expectedPath)
       }
     })
@@ -601,7 +601,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Unicode in path parameters",
           path: "/api/users/{José}/profile",
-          expected: "GET::api__users__Jos__profile",
+          expected: "GET::api__users__---Jos__profile",
         },
         {
           description: "Unicode mixed with special characters",
@@ -688,7 +688,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Trailing slashes with path parameters",
           path: "/users/{id}/profile/",
-          expected: "GET::users__id__profile",
+          expected: "GET::users__---id__profile",
         },
       ]
 
@@ -753,7 +753,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Consecutive slashes with path parameters",
           path: "/users//{id}//profile",
-          expected: "GET::users__id__profile",
+          expected: "GET::users__---id__profile",
         },
         {
           description: "Consecutive slashes with hyphens",
@@ -816,7 +816,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Slashes with path parameters and special chars",
           path: "/users//{email@domain.com}//profile/",
-          expected: "GET::users__emaildomaincom__profile",
+          expected: "GET::users__---emaildomaincom__profile",
         },
       ]
 

@@ -143,8 +143,11 @@ export class ApiClient {
           if (paramLocation === "path") {
             // Escape key before using it in regex patterns
             const escapedKey = escapeRegExp(key)
-            // Try standard OpenAPI and Express-style parameters first
-            const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
+            // Try standard OpenAPI, Express-style parameters, and unique markers
+            const paramRegex = new RegExp(
+              `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?:\\/|$)`,
+              "g",
+            )
 
             // If specific parameter style was found, use it
             if (paramRegex.test(resolvedPath)) {
@@ -165,8 +168,11 @@ export class ApiClient {
           const value = paramsCopy[key]
           // Escape key before using it in regex patterns
           const escapedKey = escapeRegExp(key)
-          // First try standard OpenAPI and Express-style parameters
-          const paramRegex = new RegExp(`\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)`, "g")
+          // First try standard OpenAPI, Express-style parameters, and unique markers
+          const paramRegex = new RegExp(
+            `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?:\\/|$)`,
+            "g",
+          )
 
           // If found, replace using regex
           if (paramRegex.test(resolvedPath)) {

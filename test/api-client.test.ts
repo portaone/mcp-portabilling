@@ -249,3 +249,138 @@ describe("ApiClient Dynamic Meta-Tools", () => {
     ).rejects.toThrow("No endpoint found for path '/invalid' in tool 'GET-API-ENDPOINT-SCHEMA'")
   })
 })
+
+// Regression test for Issue #33: Path parameter replacement bug
+describe("Issue #33 Regression Test", () => {
+  it("should correctly replace path parameters without affecting similar text in path segments", async () => {
+    // This test specifically addresses the bug described in issue #33:
+    // Original bug: /inputs/{input} with input=00000 would result in /00000s/input
+    // Expected behavior: /inputs/{input} with input=00000 should result in /inputs/00000
+
+    const mockSpecLoader = new OpenAPISpecLoader()
+    const mockApiClient = new ApiClient(
+      "https://api.example.com",
+      new StaticAuthProvider(),
+      mockSpecLoader,
+    )
+
+    // Create a mock OpenAPI spec with the problematic path structure
+    const testSpec = {
+      openapi: "3.0.0",
+      info: { title: "Test API", version: "1.0.0" },
+      paths: {
+        "/inputs/{input}": {
+          get: {
+            operationId: "getInput",
+            parameters: [
+              {
+                name: "input",
+                in: "path",
+                required: true,
+                schema: { type: "string" as const },
+              },
+            ],
+            responses: { "200": { description: "Success" } },
+          },
+        },
+      },
+    }
+
+    // Set the spec and generate tools
+    mockApiClient.setOpenApiSpec(testSpec as any)
+    const tools = mockSpecLoader.parseOpenAPISpec(testSpec as any)
+    mockApiClient.setTools(tools)
+
+    // Mock axios to capture the actual request URL
+    let capturedConfig: any = null
+    const mockAxios = vi.fn().mockImplementation((config) => {
+      capturedConfig = config
+      return Promise.resolve({ data: { success: true } })
+    })
+    ;(mockApiClient as any).axiosInstance = mockAxios
+
+    // Execute the API call with the problematic parameter value from issue #33
+    const toolId = "GET::inputs__---input"
+    await mockApiClient.executeApiCall(toolId, { input: "00000" })
+
+    // Verify the URL was correctly constructed
+    expect(capturedConfig).toBeDefined()
+    expect(capturedConfig.url).toBe("/inputs/00000")
+
+    // Explicitly verify the bug is NOT present
+    expect(capturedConfig.url).not.toBe("/00000s/input")
+  })
+
+  it("should handle multiple path parameters without substring replacement issues", async () => {
+    // Additional test to ensure the fix works with multiple parameters
+    const mockSpecLoader = new OpenAPISpecLoader()
+    const mockApiClient = new ApiClient(
+      "https://api.example.com",
+      new StaticAuthProvider(),
+      mockSpecLoader,
+    )
+
+    const testSpec = {
+      openapi: "3.0.0",
+      info: { title: "Test API", version: "1.0.0" },
+      paths: {
+        "/users/{userId}/posts/{postId}": {
+          get: {
+            operationId: "getUserPost",
+            parameters: [
+              {
+                name: "userId",
+                in: "path",
+                required: true,
+                schema: { type: "string" as const },
+              },
+              {
+                name: "postId",
+                in: "path",
+                required: true,
+                schema: { type: "string" as const },
+              },
+            ],
+            responses: { "200": { description: "Success" } },
+          },
+        },
+      },
+    }
+
+    mockApiClient.setOpenApiSpec(testSpec as any)
+    const tools = mockSpecLoader.parseOpenAPISpec(testSpec as any)
+    mockApiClient.setTools(tools)
+
+    let capturedConfig: any = null
+    const mockAxios = vi.fn().mockImplementation((config) => {
+      capturedConfig = config
+      return Promise.resolve({ data: { success: true } })
+    })
+    ;(mockApiClient as any).axiosInstance = mockAxios
+
+    const toolId = "GET::users__---userId__posts__---postId"
+    await mockApiClient.executeApiCall(toolId, { userId: "123", postId: "456" })
+
+    expect(capturedConfig.url).toBe("/users/123/posts/456")
+  })
+})
+
+/*
+ * Issue #33 Fix: Path Parameter Replacement Bug
+ *
+ * The bug was in the tool ID generation and path parameter replacement:
+ *
+ * OLD BEHAVIOR:
+ * - Path: /inputs/{input} with parameter input=00000
+ * - Tool ID generation removed braces: /inputs/input
+ * - Parameter replacement: /inputs/input -> /00000s/input (WRONG!)
+ *
+ * NEW BEHAVIOR:
+ * - Path: /inputs/{input} with parameter input=00000
+ * - Tool ID generation transforms braces to markers: /inputs/---input
+ * - Parameter replacement: /inputs/---input -> /inputs/00000 (CORRECT!)
+ *
+ * The fix transforms {param} to ---param in tool IDs to preserve parameter
+ * location information, then updates the parameter replacement logic to
+ * handle these markers correctly.
+ */

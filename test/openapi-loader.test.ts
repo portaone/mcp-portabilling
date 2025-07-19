@@ -385,7 +385,7 @@ paths:
 
     it("should handle various number-letter combinations when disableAbbreviation is true", () => {
       const loader = new OpenAPISpecLoader({ disableAbbreviation: true })
-      
+
       expect(loader.abbreviateOperationId("api2DataProcessor")).toBe("api2-data-processor")
       expect(loader.abbreviateOperationId("blockchain2Handler")).toBe("blockchain2-handler")
       expect(loader.abbreviateOperationId("v1ApiService")).toBe("v1-api-service")
@@ -400,7 +400,7 @@ paths:
       expect(tools.size).toBe(3)
       expect(tools.has("GET::users")).toBe(true)
       expect(tools.has("POST::users")).toBe(true)
-      expect(tools.has("GET::users__id")).toBe(true)
+      expect(tools.has("GET::users__---id")).toBe(true)
     })
 
     it("should set correct tool properties", () => {
@@ -424,7 +424,7 @@ paths:
 
     it("should handle required parameters", () => {
       const tools = openAPILoader.parseOpenAPISpec(mockOpenAPISpec)
-      const getUserByIdTool = tools.get("GET::users__id") as Tool
+      const getUserByIdTool = tools.get("GET::users__---id") as Tool
 
       expect(getUserByIdTool).toBeDefined()
       expect(getUserByIdTool.inputSchema).toEqual({
@@ -512,7 +512,7 @@ paths:
       expect(getUsersTool).toBeDefined()
       expect(getUsersTool.name).toBe("get-users")
 
-      const deleteUserTool = tools.get("DELETE::users__id") as Tool
+      const deleteUserTool = tools.get("DELETE::users__---id") as Tool
       expect(deleteUserTool).toBeDefined()
       expect(deleteUserTool.name).toBe("delete-users-id")
 
@@ -542,7 +542,7 @@ paths:
       const tools = openAPILoader.parseOpenAPISpec(specWithComplexPaths)
 
       const updateSettingsTool = tools.get(
-        "PUT::api__v2__user-management__profiles__userId__settings",
+        "PUT::api__v2__user-management__profiles__---userId__settings",
       ) as Tool
       expect(updateSettingsTool).toBeDefined()
       expect(updateSettingsTool.name).toBe("put-api-v-2-user-management-profiles-user-id-settings")
