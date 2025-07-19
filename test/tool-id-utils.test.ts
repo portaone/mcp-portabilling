@@ -286,7 +286,7 @@ describe("Tool ID Utilities", () => {
         // Method should match exactly
         expect(parsed.method).toBe(testCase.method.toUpperCase())
 
-        // Path should match the structure (path params will have ---param markers replaced back)
+        // Path should match the structure with ---param markers for parameters
         const expectedPath = testCase.path.replace(/\{([^}]+)\}/g, "---$1")
         expect(parsed.path).toBe(expectedPath)
       }
