@@ -42,6 +42,7 @@ export function parseHeaders(headerStr?: string): Record<string, string> {
       if (colonIndex > 0) {
         const key = header.substring(0, colonIndex).trim()
         const value = header.substring(colonIndex + 1).trim()
+        // Only add headers with non-empty keys (filters out whitespace-only keys)
         if (key) headers[key] = value
       }
     })

@@ -68,6 +68,14 @@ describe("parseHeaders", () => {
       "X-Empty": "",
     })
   })
+
+  it("should skip headers with empty or whitespace-only keys", () => {
+    const headerStr = ":empty-key,   :whitespace-key,Valid-Key:value"
+    const result = parseHeaders(headerStr)
+    expect(result).toEqual({
+      "Valid-Key": "value",
+    })
+  })
 })
 
 describe("loadConfig", () => {
