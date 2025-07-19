@@ -107,11 +107,11 @@ export class ApiClient {
       }
 
       if (toolId === "GET-API-ENDPOINT-SCHEMA") {
-        return this.handleGetApiEndpointSchema(params)
+        return this.handleGetApiEndpointSchema(toolId, params)
       }
 
       if (toolId === "INVOKE-API-ENDPOINT") {
-        return this.handleInvokeApiEndpoint(params)
+        return this.handleInvokeApiEndpoint(toolId, params)
       }
 
       // Parse method and path from the tool ID
@@ -345,18 +345,18 @@ export class ApiClient {
    * Handle the GET-API-ENDPOINT-SCHEMA meta-tool
    * Returns the JSON schema for a specified API endpoint
    */
-  private handleGetApiEndpointSchema(params: Record<string, any>): any {
+  private handleGetApiEndpointSchema(toolId: string, params: Record<string, any>): any {
     const { endpoint } = params
 
     if (!endpoint) {
-      throw new Error("Missing required parameter: endpoint")
+      throw new Error(`Missing required parameter 'endpoint' for tool '${toolId}'`)
     }
 
     // If we have the OpenAPI spec, use it to get detailed schema information
     if (this.openApiSpec) {
       const pathItem = this.openApiSpec.paths[endpoint]
       if (!pathItem) {
-        throw new Error(`No endpoint found for path: ${endpoint}`)
+        throw new Error(`No endpoint found for path '${endpoint}' in tool '${toolId}'`)
       }
 
       const operations: any[] = []
@@ -386,7 +386,7 @@ export class ApiClient {
       }
 
       if (operations.length === 0) {
-        throw new Error(`No valid HTTP operations found for path: ${endpoint}`)
+        throw new Error(`No valid HTTP operations found for path '${endpoint}' in tool '${toolId}'`)
       }
 
       return {
@@ -431,11 +431,11 @@ export class ApiClient {
    * Handle the INVOKE-API-ENDPOINT meta-tool
    * Dynamically invokes an API endpoint with the provided parameters
    */
-  private async handleInvokeApiEndpoint(params: Record<string, any>): Promise<any> {
+  private async handleInvokeApiEndpoint(toolId: string, params: Record<string, any>): Promise<any> {
     const { endpoint, method, params: endpointParams = {} } = params
 
     if (!endpoint) {
-      throw new Error("Missing required parameter: endpoint")
+      throw new Error(`Missing required parameter 'endpoint' for tool '${toolId}'`)
     }
 
     // If method is specified, construct the tool ID directly
@@ -454,7 +454,7 @@ export class ApiClient {
           return this.makeDirectHttpRequest(httpMethod, path, endpointParams)
         } else {
           throw new Error(
-            `Endpoint ${method.toUpperCase()} ${endpoint} not found in API specification`,
+            `No endpoint found for path '${endpoint}' with method '${method}' in tool '${toolId}'`,
           )
         }
       } else {
@@ -462,44 +462,24 @@ export class ApiClient {
       }
     }
 
-    // If no method specified, find any tool that matches the endpoint path
-    let matchingToolId: string | undefined
-
-    for (const [toolId] of this.toolsMap.entries()) {
-      try {
-        const { path } = this.parseToolId(toolId)
-        if (path === endpoint) {
-          matchingToolId = toolId
-          break
-        }
-      } catch (error) {
-        // Skip tools that don't follow the standard format
-        continue
-      }
-    }
-
-    if (!matchingToolId) {
-      // If we have the OpenAPI spec, try to find any operation for this path
-      if (this.openApiSpec) {
-        const pathItem = this.openApiSpec.paths[endpoint]
-        if (pathItem) {
-          // Find the first available HTTP method for this path
-          for (const method of ["get", "post", "put", "patch", "delete", "options", "head"]) {
-            if ((pathItem as any)[method]) {
-              return this.makeDirectHttpRequest(method.toUpperCase(), endpoint, endpointParams)
-            }
+    // If no method is specified, try to find the first available method for this endpoint
+    if (this.openApiSpec) {
+      const pathItem = this.openApiSpec.paths[endpoint]
+      if (pathItem) {
+        // Find the first available HTTP method for this path
+        for (const method of ["get", "post", "put", "patch", "delete", "options", "head"]) {
+          if ((pathItem as any)[method]) {
+            return this.makeDirectHttpRequest(method.toUpperCase(), endpoint, endpointParams)
           }
-          throw new Error(`No HTTP operations found for endpoint: ${endpoint}`)
-        } else {
-          throw new Error(`No endpoint found for path: ${endpoint}`)
         }
+        throw new Error(`No HTTP operations found for endpoint '${endpoint}' in tool '${toolId}'`)
       } else {
-        throw new Error(`No endpoint found for path: ${endpoint}`)
+        throw new Error(`No endpoint found for path '${endpoint}' in tool '${toolId}'`)
       }
     }
 
-    // Recursively call executeApiCall with the found tool ID and provided parameters
-    return this.executeApiCall(matchingToolId, endpointParams)
+    // Fallback: try to find a tool that matches this endpoint path
+    throw new Error(`No endpoint found for path '${endpoint}' in tool '${toolId}'`)
   }
 
   /**
