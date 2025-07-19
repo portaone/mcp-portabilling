@@ -38,11 +38,6 @@ async function main(): Promise<void> {
   }
 }
 
-// Only run main() if this file is executed directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
-}
-
 // Re-export important classes for library usage
 export * from "./server"
 export * from "./api-client"
