@@ -31,7 +31,11 @@ export class OpenAPIServer {
 
     // Use AuthProvider if provided, otherwise fallback to static headers
     const authProviderOrHeaders = config.authProvider || new StaticAuthProvider(config.headers)
-    this.apiClient = new ApiClient(config.apiBaseUrl, authProviderOrHeaders)
+    this.apiClient = new ApiClient(
+      config.apiBaseUrl,
+      authProviderOrHeaders,
+      this.toolsManager.getSpecLoader(),
+    )
 
     this.initializeHandlers()
   }
@@ -107,12 +111,20 @@ export class OpenAPIServer {
    */
   async start(transport: Transport): Promise<void> {
     await this.toolsManager.initialize()
+
     // Pass the tools to the API client
     const toolsMap = new Map<string, Tool>()
     for (const [toolId, tool] of this.toolsManager.getToolsWithIds()) {
       toolsMap.set(toolId, tool)
     }
     this.apiClient.setTools(toolsMap)
+
+    // Pass the OpenAPI spec to the API client for dynamic meta-tools
+    const spec = this.toolsManager.getOpenApiSpec()
+    if (spec) {
+      this.apiClient.setOpenApiSpec(spec)
+    }
+
     await this.server.connect(transport)
   }
 }

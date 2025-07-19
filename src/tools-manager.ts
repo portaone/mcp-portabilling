@@ -10,6 +10,7 @@ import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
 export class ToolsManager {
   private tools: Map<string, Tool> = new Map()
   private specLoader: OpenAPISpecLoader
+  private loadedSpec?: OpenAPIV3.Document
 
   constructor(private config: OpenAPIMCPServerConfig) {
     // Ensure toolsMode has a default value of 'all'
@@ -17,6 +18,20 @@ export class ToolsManager {
     this.specLoader = new OpenAPISpecLoader({
       disableAbbreviation: this.config.disableAbbreviation,
     })
+  }
+
+  /**
+   * Get the OpenAPI spec loader instance
+   */
+  getSpecLoader(): OpenAPISpecLoader {
+    return this.specLoader
+  }
+
+  /**
+   * Get the loaded OpenAPI specification
+   */
+  getOpenApiSpec(): OpenAPIV3.Document | undefined {
+    return this.loadedSpec
   }
 
   /**
@@ -52,7 +67,12 @@ export class ToolsManager {
       inputSchema: {
         type: "object",
         properties: {
-          endpoint: { type: "string", description: "Endpoint path to invoke" },
+          endpoint: { type: "string", description: "Endpoint path to invoke (e.g. /users/{id})" },
+          method: {
+            type: "string",
+            description: "HTTP method to use (optional, e.g. GET, POST, PUT, DELETE)",
+            enum: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+          },
           params: {
             type: "object",
             description: "Parameters for the API call",
@@ -75,6 +95,8 @@ export class ToolsManager {
       this.config.specInputMethod,
       this.config.inlineSpecContent,
     )
+    this.loadedSpec = spec // Store the loaded spec
+
     // Determine tools loading mode
     if (this.config.toolsMode === "dynamic") {
       // Use dynamic discovery meta-tools
