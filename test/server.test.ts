@@ -45,8 +45,10 @@ describe("OpenAPIServer", () => {
     getAllTools: Mock
     findTool: Mock
     getToolsWithIds: Mock
+    getSpecLoader: Mock
+    getOpenApiSpec: Mock
   }
-  let mockApiClient: { executeApiCall: Mock; setTools: Mock }
+  let mockApiClient: { executeApiCall: Mock; setTools: Mock; setOpenApiSpec: Mock }
 
   type Mock = ReturnType<typeof vi.fn>
 
@@ -70,6 +72,8 @@ describe("OpenAPIServer", () => {
           getAllTools: vi.fn().mockReturnValue([]),
           findTool: vi.fn(),
           getToolsWithIds: vi.fn().mockReturnValue([]),
+          getSpecLoader: vi.fn().mockReturnValue({}), // Return a mock spec loader object
+          getOpenApiSpec: vi.fn(),
         }) as any,
     )
 
@@ -78,6 +82,7 @@ describe("OpenAPIServer", () => {
         ({
           executeApiCall: vi.fn(),
           setTools: vi.fn(),
+          setOpenApiSpec: vi.fn(),
         }) as any,
     )
 
@@ -464,7 +469,7 @@ describe("OpenAPIServer", () => {
       new OpenAPIServer(configWithAuthProvider)
 
       // Verify ApiClient was constructed with the AuthProvider
-      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)
+      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider, expect.anything())
     })
 
     it("should use StaticAuthProvider with headers when no AuthProvider provided", () => {
@@ -482,6 +487,7 @@ describe("OpenAPIServer", () => {
           getAuthHeaders: expect.any(Function),
           handleAuthError: expect.any(Function),
         }),
+        expect.anything(),
       )
     })
 
@@ -500,7 +506,7 @@ describe("OpenAPIServer", () => {
       new OpenAPIServer(configWithBoth)
 
       // Verify ApiClient was constructed with the AuthProvider, not the headers
-      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider)
+      expect(ApiClient).toHaveBeenCalledWith(config.apiBaseUrl, mockAuthProvider, expect.anything())
     })
   })
 })

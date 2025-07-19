@@ -2,6 +2,8 @@ import axios, { AxiosInstance, AxiosError } from "axios"
 import { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { AuthProvider, StaticAuthProvider, isAuthError } from "./auth-provider.js"
 import { parseToolId as parseToolIdUtil } from "./utils/tool-id.js"
+import { OpenAPISpecLoader } from "./openapi-loader.js"
+import { OpenAPIV3 } from "openapi-types"
 
 /**
  * Client for making API calls to the backend service
@@ -10,14 +12,21 @@ export class ApiClient {
   private axiosInstance: AxiosInstance
   private toolsMap: Map<string, Tool> = new Map()
   private authProvider: AuthProvider
+  private specLoader?: OpenAPISpecLoader
+  private openApiSpec?: OpenAPIV3.Document
 
   /**
    * Create a new API client
    *
    * @param baseUrl - Base URL for the API
    * @param authProviderOrHeaders - AuthProvider instance or static headers for backward compatibility
+   * @param specLoader - Optional OpenAPI spec loader for dynamic meta-tools
    */
-  constructor(baseUrl: string, authProviderOrHeaders?: AuthProvider | Record<string, string>) {
+  constructor(
+    baseUrl: string,
+    authProviderOrHeaders?: AuthProvider | Record<string, string>,
+    specLoader?: OpenAPISpecLoader,
+  ) {
     this.axiosInstance = axios.create({
       baseURL: baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
     })
@@ -35,6 +44,8 @@ export class ApiClient {
       // It's an AuthProvider
       this.authProvider = authProviderOrHeaders as AuthProvider
     }
+
+    this.specLoader = specLoader
   }
 
   /**
@@ -44,6 +55,15 @@ export class ApiClient {
    */
   setTools(tools: Map<string, Tool>): void {
     this.toolsMap = tools
+  }
+
+  /**
+   * Set the OpenAPI specification for dynamic meta-tools
+   *
+   * @param spec - The OpenAPI specification document
+   */
+  setOpenApiSpec(spec: OpenAPIV3.Document): void {
+    this.openApiSpec = spec
   }
 
   /**
@@ -81,6 +101,19 @@ export class ApiClient {
     isRetry: boolean,
   ): Promise<any> {
     try {
+      // Handle dynamic meta-tools that don't follow the standard HTTP method::path format
+      if (toolId === "LIST-API-ENDPOINTS") {
+        return await this.handleListApiEndpoints()
+      }
+
+      if (toolId === "GET-API-ENDPOINT-SCHEMA") {
+        return this.handleGetApiEndpointSchema(params)
+      }
+
+      if (toolId === "INVOKE-API-ENDPOINT") {
+        return this.handleInvokeApiEndpoint(params)
+      }
+
       // Parse method and path from the tool ID
       const { method, path } = this.parseToolId(toolId)
 
@@ -234,5 +267,289 @@ export class ApiClient {
     }
 
     return result
+  }
+
+  /**
+   * Handle the LIST-API-ENDPOINTS meta-tool
+   * Returns a list of all available API endpoints from the loaded tools
+   */
+  private async handleListApiEndpoints(): Promise<any> {
+    const endpoints: any[] = []
+
+    // If we have the OpenAPI spec, use it to get all available endpoints
+    if (this.openApiSpec) {
+      for (const [path, pathItem] of Object.entries(this.openApiSpec.paths)) {
+        if (!pathItem) continue
+
+        for (const [method, operation] of Object.entries(pathItem)) {
+          if (method === "parameters" || !operation) continue
+
+          // Skip invalid HTTP methods
+          if (
+            !["get", "post", "put", "patch", "delete", "options", "head"].includes(
+              method.toLowerCase(),
+            )
+          ) {
+            continue
+          }
+
+          const op = operation as any
+          endpoints.push({
+            method: method.toUpperCase(),
+            path,
+            summary: op.summary || "",
+            description: op.description || "",
+            operationId: op.operationId || "",
+            tags: op.tags || [],
+          })
+        }
+      }
+    } else {
+      // Fallback: use the current toolsMap
+      for (const [toolId, tool] of this.toolsMap.entries()) {
+        // Skip other meta-tools in the listing
+        if (
+          toolId.startsWith("LIST-API-ENDPOINTS") ||
+          toolId.startsWith("GET-API-ENDPOINT-SCHEMA") ||
+          toolId.startsWith("INVOKE-API-ENDPOINT")
+        ) {
+          continue
+        }
+
+        try {
+          const { method, path } = this.parseToolId(toolId)
+          endpoints.push({
+            toolId,
+            name: tool.name,
+            description: tool.description,
+            method: method.toUpperCase(),
+            path,
+          })
+        } catch (error) {
+          // Skip tools that don't follow the standard format
+          continue
+        }
+      }
+    }
+
+    return {
+      endpoints,
+      total: endpoints.length,
+      note: this.openApiSpec
+        ? "Use INVOKE-API-ENDPOINT to call specific endpoints with the path parameter"
+        : "Limited endpoint information - OpenAPI spec not available",
+    }
+  }
+
+  /**
+   * Handle the GET-API-ENDPOINT-SCHEMA meta-tool
+   * Returns the JSON schema for a specified API endpoint
+   */
+  private handleGetApiEndpointSchema(params: Record<string, any>): any {
+    const { endpoint } = params
+
+    if (!endpoint) {
+      throw new Error("Missing required parameter: endpoint")
+    }
+
+    // If we have the OpenAPI spec, use it to get detailed schema information
+    if (this.openApiSpec) {
+      const pathItem = this.openApiSpec.paths[endpoint]
+      if (!pathItem) {
+        throw new Error(`No endpoint found for path: ${endpoint}`)
+      }
+
+      const operations: any[] = []
+      for (const [method, operation] of Object.entries(pathItem)) {
+        if (method === "parameters" || !operation) continue
+
+        // Skip invalid HTTP methods
+        if (
+          !["get", "post", "put", "patch", "delete", "options", "head"].includes(
+            method.toLowerCase(),
+          )
+        ) {
+          continue
+        }
+
+        const op = operation as any
+        operations.push({
+          method: method.toUpperCase(),
+          operationId: op.operationId || "",
+          summary: op.summary || "",
+          description: op.description || "",
+          parameters: op.parameters || [],
+          requestBody: op.requestBody || null,
+          responses: op.responses || {},
+          tags: op.tags || [],
+        })
+      }
+
+      if (operations.length === 0) {
+        throw new Error(`No valid HTTP operations found for path: ${endpoint}`)
+      }
+
+      return {
+        path: endpoint,
+        operations,
+        pathParameters: pathItem.parameters || [],
+      }
+    } else {
+      // Fallback: find the tool that matches the requested endpoint path
+      let matchingTool: Tool | undefined
+      let matchingToolId: string | undefined
+
+      for (const [toolId, tool] of this.toolsMap.entries()) {
+        try {
+          const { path } = this.parseToolId(toolId)
+          if (path === endpoint) {
+            matchingTool = tool
+            matchingToolId = toolId
+            break
+          }
+        } catch (error) {
+          // Skip tools that don't follow the standard format
+          continue
+        }
+      }
+
+      if (!matchingTool || !matchingToolId) {
+        throw new Error(`No endpoint found for path: ${endpoint}`)
+      }
+
+      return {
+        toolId: matchingToolId,
+        name: matchingTool.name,
+        description: matchingTool.description,
+        inputSchema: matchingTool.inputSchema,
+        note: "Limited schema information - using tool definition instead of OpenAPI spec",
+      }
+    }
+  }
+
+  /**
+   * Handle the INVOKE-API-ENDPOINT meta-tool
+   * Dynamically invokes an API endpoint with the provided parameters
+   */
+  private async handleInvokeApiEndpoint(params: Record<string, any>): Promise<any> {
+    const { endpoint, method, params: endpointParams = {} } = params
+
+    if (!endpoint) {
+      throw new Error("Missing required parameter: endpoint")
+    }
+
+    // If method is specified, construct the tool ID directly
+    if (method) {
+      const toolId = `${method.toUpperCase()}::${endpoint.replace(/^\//, "").replace(/\//g, "__")}`
+
+      // Check if this tool exists in our toolsMap or if we can derive it from the OpenAPI spec
+      if (this.toolsMap.has(toolId)) {
+        return this.executeApiCall(toolId, endpointParams)
+      } else if (this.openApiSpec) {
+        // Check if the endpoint and method exist in the OpenAPI spec
+        const pathItem = this.openApiSpec.paths[endpoint]
+        if (pathItem && (pathItem as any)[method.toLowerCase()]) {
+          // Make the HTTP request directly since we have the spec but not the tool
+          const { method: httpMethod, path } = { method: method.toUpperCase(), path: endpoint }
+          return this.makeDirectHttpRequest(httpMethod, path, endpointParams)
+        } else {
+          throw new Error(
+            `Endpoint ${method.toUpperCase()} ${endpoint} not found in API specification`,
+          )
+        }
+      } else {
+        throw new Error(`Tool not found: ${toolId}`)
+      }
+    }
+
+    // If no method specified, find any tool that matches the endpoint path
+    let matchingToolId: string | undefined
+
+    for (const [toolId] of this.toolsMap.entries()) {
+      try {
+        const { path } = this.parseToolId(toolId)
+        if (path === endpoint) {
+          matchingToolId = toolId
+          break
+        }
+      } catch (error) {
+        // Skip tools that don't follow the standard format
+        continue
+      }
+    }
+
+    if (!matchingToolId) {
+      // If we have the OpenAPI spec, try to find any operation for this path
+      if (this.openApiSpec) {
+        const pathItem = this.openApiSpec.paths[endpoint]
+        if (pathItem) {
+          // Find the first available HTTP method for this path
+          for (const method of ["get", "post", "put", "patch", "delete", "options", "head"]) {
+            if ((pathItem as any)[method]) {
+              return this.makeDirectHttpRequest(method.toUpperCase(), endpoint, endpointParams)
+            }
+          }
+          throw new Error(`No HTTP operations found for endpoint: ${endpoint}`)
+        } else {
+          throw new Error(`No endpoint found for path: ${endpoint}`)
+        }
+      } else {
+        throw new Error(`No endpoint found for path: ${endpoint}`)
+      }
+    }
+
+    // Recursively call executeApiCall with the found tool ID and provided parameters
+    return this.executeApiCall(matchingToolId, endpointParams)
+  }
+
+  /**
+   * Make a direct HTTP request without going through the tool system
+   * Used by dynamic meta-tools when we have OpenAPI spec but no corresponding tool
+   */
+  private async makeDirectHttpRequest(
+    method: string,
+    path: string,
+    params: Record<string, any>,
+  ): Promise<any> {
+    // Get fresh authentication headers
+    const authHeaders = await this.authProvider.getAuthHeaders()
+
+    // Prepare request configuration
+    const config: any = {
+      method: method.toLowerCase(),
+      url: path,
+      headers: authHeaders,
+    }
+
+    // Handle parameters based on HTTP method
+    if (["get", "delete", "head", "options"].includes(method.toLowerCase())) {
+      // For GET-like methods, parameters go in the query string
+      config.params = this.processQueryParams(params)
+    } else {
+      // For POST-like methods, parameters go in the request body
+      config.data = params
+    }
+
+    try {
+      // Execute the request
+      const response = await this.axiosInstance.request(config)
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError
+        throw new Error(
+          `API request failed: ${axiosError.message}${
+            axiosError.response
+              ? ` (${axiosError.response.status}: ${
+                  typeof axiosError.response.data === "object"
+                    ? JSON.stringify(axiosError.response.data)
+                    : axiosError.response.data
+                })`
+              : ""
+          }`,
+        )
+      }
+      throw error
+    }
   }
 }
