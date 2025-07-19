@@ -42,11 +42,37 @@ export function parseToolId(toolId: string): { method: string; path: string } {
  * @returns Sanitized string containing only [A-Za-z0-9_-]
  */
 function sanitizeForToolId(input: string): string {
-  return input
+  let result = input
     .replace(/[^A-Za-z0-9_-]/g, "") // Remove any character not in the allowed set
     .replace(/_{3,}/g, "__") // Collapse 3+ consecutive underscores to double underscore (preserve path separators)
-    .replace(/(?<!-)-{4,}(?!-)/g, "---") // Collapse 4+ consecutive hyphens to triple hyphen, excluding valid triple hyphen markers
-    .replace(/^[_-]+|[_-]+$/g, "") // Remove leading/trailing underscores and hyphens
+
+  // Handle hyphen sequences more carefully to preserve legitimate triple-hyphen markers
+  // while collapsing excessive consecutive hyphens
+  result = collapseExcessiveHyphens(result)
+
+  return result.replace(/^[_-]+|[_-]+$/g, "") // Remove leading/trailing underscores and hyphens
+}
+
+/**
+ * Collapse sequences of 4+ consecutive hyphens to exactly 3 hyphens,
+ * while preserving existing triple-hyphen markers.
+ *
+ * Uses a simpler `-{4,}` regex instead of complex negative lookbehind/lookahead
+ * patterns like `(?<!-)-{4,}(?!-)` for the following reasons:
+ *
+ * 1. **Predictability**: Simple regex has consistent, easy-to-understand behavior
+ * 2. **Maintainability**: Easier to read, debug, and modify
+ * 3. **Compatibility**: Negative lookbehind/lookahead not supported in all JS engines
+ * 4. **Performance**: Simpler patterns are generally faster
+ * 5. **Edge cases**: Complex assertions can have unexpected behaviors in corner cases
+ *
+ * The trade-off is that this approach treats all 4+ consecutive hyphens the same way,
+ * but this is actually desirable for consistent tool ID generation.
+ */
+function collapseExcessiveHyphens(input: string): string {
+  // Find all sequences of 4+ consecutive hyphens and replace with exactly 3
+  // This approach is simpler and more predictable than complex lookbehind/lookahead
+  return input.replace(/-{4,}/g, "---")
 }
 
 /**

@@ -864,6 +864,145 @@ describe("PR #38 Review Comment Edge Cases", () => {
         expect(result).toBe(expected)
       })
     })
+
+    // Comprehensive test coverage for the simpler hyphen collapse approach
+    it("should handle complex hyphen scenarios with simple regex approach", () => {
+      const complexTestCases = [
+        {
+          description: "Triple hyphens followed by 4 hyphens",
+          path: "/api/---param----test",
+          expected: "POST::api__---param---test",
+        },
+        {
+          description: "4 hyphens followed by triple hyphens",
+          path: "/api/----test---param",
+          expected: "POST::api__---test---param",
+        },
+        {
+          description: "Multiple segments with mixed hyphens",
+          path: "/api/---a----b---c-----d",
+          expected: "POST::api__---a---b---c---d",
+        },
+        {
+          description: "7 consecutive hyphens",
+          path: "/api/test-------more",
+          expected: "POST::api__test---more",
+        },
+        {
+          description: "Triple hyphens at start and end with excessive in middle",
+          path: "/---start----middle---end",
+          expected: "POST::start---middle---end", // Leading/trailing hyphens removed
+        },
+        {
+          description: "Only hyphens",
+          path: "/----------",
+          expected: "POST::", // Should be sanitized to empty after processing
+        },
+        {
+          description: "Mixed with path parameters",
+          path: "/api/{param}----test---{other}",
+          expected: "POST::api__---param---test---other",
+        },
+      ]
+
+      complexTestCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("POST", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should verify the regex doesn't break legitimate patterns", () => {
+      // Test cases that should NOT be modified by the regex
+      const legitimatePatterns = [
+        {
+          description: "Single hyphen",
+          path: "/api/test-name/items",
+          expected: "GET::api__test-name__items",
+        },
+        {
+          description: "Double hyphen",
+          path: "/api/test--name/items",
+          expected: "GET::api__test--name__items",
+        },
+        {
+          description: "Triple hyphen (should be preserved)",
+          path: "/api/test---name/items",
+          expected: "GET::api__test---name__items",
+        },
+        {
+          description: "Mixed single, double, triple hyphens",
+          path: "/api/a-b--c---d/items",
+          expected: "GET::api__a-b--c---d__items",
+        },
+      ]
+
+      legitimatePatterns.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should handle edge cases with the simple hyphen collapse approach", () => {
+      const edgeCases = [
+        {
+          description: "Hyphens at path boundaries",
+          path: "----/api/test/----",
+          expected: "GET::api__test",
+        },
+        {
+          description: "Alternating pattern",
+          path: "/api/---a----b---c",
+          expected: "GET::api__---a---b---c",
+        },
+        {
+          description: "Very long hyphen sequence",
+          path: "/api/test" + "-".repeat(20) + "more",
+          expected: "GET::api__test---more",
+        },
+      ]
+
+      edgeCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+    })
+
+    it("should demonstrate the benefits of the simple approach over complex regex", () => {
+      // This test documents why we chose the simple -{4,} approach over (?<!-)-{4,}(?!-)
+      const testCases = [
+        {
+          description: "Simple approach is predictable: any 4+ hyphens become exactly 3",
+          path: "/api/test----more",
+          expected: "GET::api__test---more",
+        },
+        {
+          description: "No complex edge cases with boundary detection",
+          path: "/api/---param----test---end",
+          expected: "GET::api__---param---test---end",
+        },
+        {
+          description: "Consistent behavior regardless of context",
+          path: "/start----middle----end",
+          expected: "GET::start---middle---end",
+        },
+        {
+          description: "Works correctly with path parameters",
+          path: "/api/{param}----{other}-----test",
+          expected: "GET::api__---param---other---test",
+        },
+      ]
+
+      testCases.forEach(({ description, path, expected }) => {
+        const result = generateToolId("GET", path)
+        expect(result).toBe(expected)
+      })
+
+      // The simple approach avoids:
+      // - Browser compatibility issues with lookbehind/lookahead (not supported in all engines)
+      // - Complex regex logic that's hard to understand and maintain
+      // - Potential edge cases where the negative assertions might not work as expected
+      // - Performance overhead of complex regex patterns
+    })
   })
 
   describe("Parameter Matching Precision Issues", () => {
