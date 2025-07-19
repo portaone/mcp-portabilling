@@ -58,6 +58,16 @@ describe("parseHeaders", () => {
       Authorization: "Bearer token:with:multiple:colons",
     })
   })
+
+  it("should handle empty header values", () => {
+    const headerStr = "X-Custom-Header:,Authorization:Bearer token,X-Empty:"
+    const result = parseHeaders(headerStr)
+    expect(result).toEqual({
+      "X-Custom-Header": "",
+      Authorization: "Bearer token",
+      "X-Empty": "",
+    })
+  })
 })
 
 describe("loadConfig", () => {
