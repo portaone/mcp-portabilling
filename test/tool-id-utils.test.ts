@@ -189,19 +189,19 @@ describe("Tool ID Utilities", () => {
     })
 
     describe("Character Sanitization", () => {
-      it("should remove special characters not in [A-Za-z0-9_-]", () => {
+      it("should remove special characters not in [A-Za-z0-9_.-]", () => {
         const result = generateToolId("POST", "/api/v2.1/users@domain.com")
-        expect(result).toBe("POST::api__v21__usersdomaincom")
+        expect(result).toBe("POST::api__v2.1__usersdomain.com")
       })
 
-      it("should handle dots in version numbers", () => {
+      it("should preserve dots in version numbers", () => {
         const result = generateToolId("GET", "/api/v1.2.3/users")
-        expect(result).toBe("GET::api__v123__users")
+        expect(result).toBe("GET::api__v1.2.3__users")
       })
 
-      it("should remove at symbols and other email-like characters", () => {
+      it("should remove at symbols but preserve dots in email-like characters", () => {
         const result = generateToolId("PUT", "/users/{email@domain.com}/profile")
-        expect(result).toBe("PUT::users__---emaildomaincom__profile")
+        expect(result).toBe("PUT::users__---emaildomain.com__profile")
       })
 
       it("should handle query parameter-like syntax", () => {
@@ -236,7 +236,7 @@ describe("Tool ID Utilities", () => {
           "POST",
           "/api/v2.0/users/{user@domain.com}/posts?filter=active&sort=date",
         )
-        expect(result).toBe("POST::api__v20__users__---userdomaincom__postsfilteractivesortdate")
+        expect(result).toBe("POST::api__v2.0__users__---userdomain.com__postsfilteractivesortdate")
       })
 
       it("should preserve underscores in the sanitized output", () => {
@@ -431,9 +431,9 @@ describe("Tool ID Utilities", () => {
         expect(parsed.method).toBe(testCase.method.toUpperCase())
 
         // The parsed path will be the sanitized version with slashes restored
-        // Note: Special characters will be removed, so we can't expect exact match
-        expect(parsed.path).toMatch(/^\/[A-Za-z0-9_/-]*$/)
-        expect(toolId).toMatch(/^[A-Z]+::[A-Za-z0-9_-]*$/)
+        // Note: Special characters will be removed except dots, so we can't expect exact match
+        expect(parsed.path).toMatch(/^\/[A-Za-z0-9_/.-]*$/)
+        expect(toolId).toMatch(/^[A-Z]+::[A-Za-z0-9_.-]*$/)
       }
     })
   })
@@ -452,11 +452,11 @@ describe("Tool ID Utilities", () => {
       for (const path of testPaths) {
         const toolId = generateToolId("GET", path)
 
-        // Should match the expected format: METHOD::pathPart
-        expect(toolId).toMatch(/^[A-Z]+::[A-Za-z0-9_-]*$/)
+        // Should match the expected format: METHOD::pathPart (now includes dots)
+        expect(toolId).toMatch(/^[A-Z]+::[A-Za-z0-9_.-]*$/)
 
-        // Should not contain any unsafe characters
-        expect(toolId).not.toMatch(/[^A-Za-z0-9_:-]/)
+        // Should not contain any unsafe characters (dots are now allowed)
+        expect(toolId).not.toMatch(/[^A-Za-z0-9_.:-]/)
 
         // Should have exactly one :: separator
         expect(toolId.split("::")).toHaveLength(2)
@@ -606,7 +606,7 @@ describe("Tool ID Utilities", () => {
         {
           description: "Unicode mixed with special characters",
           path: "/api/users/José@domain.com/profile",
-          expected: "GET::api__users__Josdomaincom__profile",
+          expected: "GET::api__users__Josdomain.com__profile",
         },
         {
           description: "Empty segments after Unicode removal",
@@ -811,12 +811,12 @@ describe("Tool ID Utilities", () => {
         {
           description: "Slashes with special characters",
           path: "//api@domain.com//users/",
-          expected: "GET::apidomaincom__users",
+          expected: "GET::apidomain.com__users",
         },
         {
           description: "Slashes with path parameters and special chars",
           path: "/users//{email@domain.com}//profile/",
-          expected: "GET::users__---emaildomaincom__profile",
+          expected: "GET::users__---emaildomain.com__profile",
         },
       ]
 
