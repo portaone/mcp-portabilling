@@ -827,3 +827,139 @@ describe("Tool ID Utilities", () => {
     })
   })
 })
+
+// New test section for PR #38 review comment issues
+describe("PR #38 Review Comment Edge Cases", () => {
+  describe("Sanitization Issues with Consecutive Hyphens", () => {
+    it("should preserve legitimate triple hyphens in path segments", () => {
+      // Test case for review comment about -{4,} regex interfering with legitimate hyphens
+      const result = generateToolId("GET", "/api/resource---name/items")
+      expect(result).toBe("GET::api__resource---name__items")
+    })
+
+    it("should collapse 4+ consecutive hyphens to triple hyphen while preserving existing triple hyphens", () => {
+      // This tests the edge case where we have both legitimate triple hyphens and excessive hyphens
+      const result = generateToolId("POST", "/api/resource---name----test")
+      expect(result).toBe("POST::api__resource---name---test")
+    })
+
+    it("should handle mixed consecutive hyphens scenarios", () => {
+      const testCases = [
+        {
+          path: "/api/test----more",
+          expected: "POST::api__test---more",
+        },
+        {
+          path: "/api/test-----even-more",
+          expected: "POST::api__test---even-more",
+        },
+        {
+          path: "/api/resource---valid----invalid",
+          expected: "POST::api__resource---valid---invalid",
+        },
+      ]
+
+      testCases.forEach(({ path, expected }) => {
+        const result = generateToolId("POST", path)
+        expect(result).toBe(expected)
+      })
+    })
+  })
+
+  describe("Parameter Matching Precision Issues", () => {
+    it("should not partially match parameter names in path segments", () => {
+      // This tests the precision issue mentioned in the review comments
+      // where ---param might match partial strings when parameter names are substrings
+
+      // Create a test path that would cause issues with the old regex pattern
+      const testPath = "/api__users__---userid__info__---user"
+      const paramRegex1 = new RegExp(`---user(?:\\/|$)`, "g") // Current implementation
+      const paramRegex2 = new RegExp(`---user(?=__|/|$)`, "g") // Suggested fix
+
+      // The old regex should have the precision issue - matching "---user" in "---userid"
+      // Let's test with a clearer case
+      const problematicPath = "/api/---user-data/---user"
+      const oldMatches = problematicPath.match(paramRegex1) || []
+      const newMatches = problematicPath.match(paramRegex2) || []
+
+      // The old regex should match "---user" even when it's part of "---user-data"
+      // But since our implementation path uses __ separators, let's test the actual scenario
+      const actualTestPath = "/api__users__---user__info__---userid"
+      const oldActualMatches = actualTestPath.match(new RegExp(`---user(?:\\/|$)`, "g")) || []
+      const newActualMatches = actualTestPath.match(new RegExp(`---user(?=__|/|$)`, "g")) || []
+
+      // The old regex won't match anything because it looks for / or end of string
+      // The new regex should match exactly once at the boundary
+      expect(newActualMatches.length).toBe(1)
+      expect(newActualMatches[0]).toBe("---user")
+
+      // Test edge case where parameter name is a substring
+      const edgeCasePath = "/api__---userid__---user"
+      const edgeOldMatches = edgeCasePath.match(new RegExp(`---user(?:\\/|$)`, "g")) || []
+      const edgeNewMatches = edgeCasePath.match(new RegExp(`---user(?=__|/|$)`, "g")) || []
+
+      expect(edgeNewMatches.length).toBe(1) // Should only match ---user, not ---userid
+    })
+
+    it("should handle parameter names that are substrings of other parameters", () => {
+      const testCases = [
+        {
+          description: "parameter name is substring of path segment",
+          path: "/api/users/---userid/---user",
+          paramToReplace: "user",
+          replacementValue: "123",
+          expectedMatches: 1, // Should only match "---user", not "---userid"
+        },
+        {
+          description: "parameter name appears in multiple contexts",
+          path: "/api/---id-data/---id",
+          paramToReplace: "id",
+          replacementValue: "456",
+          expectedMatches: 1, // Should only match "---id", not "---id-data"
+        },
+      ]
+
+      testCases.forEach(({ description, path, paramToReplace, expectedMatches }) => {
+        // Test the improved regex pattern
+        const improvedRegex = new RegExp(`---${paramToReplace}(?=__|/|$)`, "g")
+        const matches = path.match(improvedRegex) || []
+        expect(matches.length).toBe(expectedMatches)
+      })
+    })
+
+    it("should correctly identify parameter boundaries with double underscores", () => {
+      // Test that the improved regex correctly handles __ as a boundary
+      const path = "/api__---param__more__---param2"
+
+      const paramRegex = new RegExp(`---param(?=__|/|$)`, "g")
+      const matches = path.match(paramRegex) || []
+
+      expect(matches.length).toBe(1) // Should only match the first "---param"
+      expect(matches[0]).toBe("---param")
+    })
+  })
+
+  describe("API Client Parameter Replacement with Edge Cases", () => {
+    it("should handle parameter replacement without substring collisions", () => {
+      // This simulates the API client parameter replacement logic
+      // to ensure the fixes work in practice
+
+      const testPath = "/api/users__---userid__info__---user"
+      const params = { user: "123", userid: "456" }
+
+      let resultPath = testPath
+
+      // Simulate the improved parameter replacement logic
+      Object.keys(params).forEach((key) => {
+        const value = params[key as keyof typeof params]
+        const improvedRegex = new RegExp(`---${key}(?=__|/|$)`, "g")
+        resultPath = resultPath.replace(improvedRegex, value)
+      })
+
+      expect(resultPath).toBe("/api/users__456__info__123")
+      // Verify no incorrect replacements occurred
+      expect(resultPath).not.toContain("---")
+      expect(resultPath).not.toContain("123id") // Would indicate substring replacement bug
+    })
+  })
+})

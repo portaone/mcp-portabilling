@@ -145,7 +145,7 @@ export class ApiClient {
             const escapedKey = escapeRegExp(key)
             // Try standard OpenAPI, Express-style parameters, and unique markers
             const paramRegex = new RegExp(
-              `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?:\\/|$)`,
+              `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?=__|/|$)`,
               "g",
             )
 
@@ -170,7 +170,7 @@ export class ApiClient {
           const escapedKey = escapeRegExp(key)
           // First try standard OpenAPI, Express-style parameters, and unique markers
           const paramRegex = new RegExp(
-            `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?:\\/|$)`,
+            `\\{${escapedKey}\\}|:${escapedKey}(?:\\/|$)|---${escapedKey}(?=__|/|$)`,
             "g",
           )
 

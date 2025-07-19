@@ -45,7 +45,7 @@ function sanitizeForToolId(input: string): string {
   return input
     .replace(/[^A-Za-z0-9_-]/g, "") // Remove any character not in the allowed set
     .replace(/_{3,}/g, "__") // Collapse 3+ consecutive underscores to double underscore (preserve path separators)
-    .replace(/-{4,}/g, "---") // Collapse 4+ consecutive hyphens to triple hyphen (preserve path param markers)
+    .replace(/(?<!-)-{4,}(?!-)/g, "---") // Collapse 4+ consecutive hyphens to triple hyphen, excluding valid triple hyphen markers
     .replace(/^[_-]+|[_-]+$/g, "") // Remove leading/trailing underscores and hyphens
 }
 
