@@ -9,9 +9,7 @@
     "type": "git",
     "url": "https://github.com/ivo-toby/mcp-openapi-server"
   },
-  "bin": {
-    "mcp-server-openapi": "./bin/mcp-server.js"
-  },
+  "bin": "./bin/mcp-server.js",
   "files": [
     "dist"
   ],
