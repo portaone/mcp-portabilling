@@ -559,7 +559,7 @@ export class StreamableHttpServerTransport implements Transport {
         this.removeInitResponseHandler(sessionId, responseHandler)
 
         // Since we're handling the initialize response specially, remove it from the session mapping
-        this.requestSessionMap.delete(message.id as string | number)
+        this.requestSessionMap.delete(message.id)
       }
     }
 
