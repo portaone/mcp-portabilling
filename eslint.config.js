@@ -14,16 +14,16 @@ const prettierRules = {
 
 export default tseslint.config(
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
   prettierConfig,
   {
-    ignores: ["eslint.config.js"], // Exclude this config file from linting
+    ignores: ["eslint.config.js", "build.js", "dist/**", "coverage/**"], // Exclude this config file and build outputs from linting
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: "module",
-      parser: tseslint.parser,
       parserOptions: {
-        project: "./tsconfig.json",
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     plugins: {
