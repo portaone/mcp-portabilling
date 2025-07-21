@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+**Before you file a bug, be sure to check out [discussions](https://github.com/ivo-toby/mcp-openapi-server/discussions) to see if your bug is actually a bug and if someone can help you**
+
 **Describe the bug**
 A clear and concise description of what the bug is.
 
