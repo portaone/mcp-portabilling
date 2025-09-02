@@ -1,66 +1,57 @@
 #!/usr/bin/env node
 
-import { OpenAPIServer } from "@ivotoby/openapi-mcp-server"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import {
-  RefreshableAuthProvider,
-  ManualTokenAuthProvider,
-  ApiKeyAuthProvider,
-} from "./auth-provider.js"
+import { OpenAPIServer } from "@ivotoby/openapi-mcp-server";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { PortaBillingAuthProvider } from "./auth-provider.js";
 
-/**
- * Example showing different AuthProvider implementations
- * Uncomment the example you want to try
- */
 async function main(): Promise<void> {
   try {
-    // Example 1: Refreshable Token Authentication
-    // Uncomment this section to use automatic token refresh
-    /*
-    const authProvider = new RefreshableAuthProvider(
-      'https://api.example.com/oauth/token', // Token refresh URL
-      'initial-access-token',                // Initial access token
-      'initial-refresh-token'                // Initial refresh token
-    )
-    */
+    const portaBillingApiBaseUrl = process.env.API_BASE_URL;
+    const portaBillingOpenApiSpec = process.env.OPENAPI_SPEC_PATH;
+    const loginId = process.env.PORTABILLING_LOGIN_ID;
+    const password = process.env.PORTABILLING_PASSWORD;
 
-    // Example 2: Manual Token Management (like Beatport)
-    // Uncomment this section for manual token updates
-    /*
-    const authProvider = new ManualTokenAuthProvider('MyAPI')
-    // Set initial token (you would get this from user input or config)
-    authProvider.updateToken('your-bearer-token-here', 3600)
-    */
-
-    // Example 3: API Key Authentication
-    // Uncomment this section for API key auth
-    const authProvider = new ApiKeyAuthProvider(
-      "your-api-key-here", // Your API key
-      "X-API-Key", // Header name (optional, defaults to X-API-Key)
-    )
-
-    const config = {
-      name: "auth-provider-example",
-      version: "1.0.0",
-      apiBaseUrl: "https://api.example.com",
-      openApiSpec: "https://api.example.com/openapi.json",
-      specInputMethod: "url" as const,
-      authProvider: authProvider, // Use AuthProvider instead of static headers
-      transportType: "stdio" as const,
-      toolsMode: "all" as const,
+    if (!portaBillingApiBaseUrl) {
+      throw new Error("Environment variable API_BASE_URL is not set. Example: https://demo.portaone.com:8444/rest");
+    }
+    if (!portaBillingOpenApiSpec) {
+      throw new Error("Environment variable OPENAPI_SPEC_PATH is not set. Example: https://demo.portaone.com:8444/doc/api/CustomerInterface.json");
+    }
+    if (!loginId) {
+      throw new Error("Environment variable PORTABILLING_LOGIN_ID is not set.");
+    }
+    if (!password) {
+      throw new Error("Environment variable PORTABILLING_PASSWORD is not set.");
     }
 
-    // Create and start the server
-    const server = new OpenAPIServer(config)
-    const transport = new StdioServerTransport()
+    const authProvider = new PortaBillingAuthProvider(
+      portaBillingApiBaseUrl,
+      loginId,
+      password
+    );
 
-    await server.start(transport)
-    console.error("AuthProvider Example MCP Server running on stdio")
+    await authProvider.login();
+
+    const config = {
+      name: "porta-billing-mcp-server",
+      version: "1.0.0",
+      apiBaseUrl: portaBillingApiBaseUrl,
+      openApiSpec: portaBillingOpenApiSpec,
+      specInputMethod: "url" as const,
+      authProvider: authProvider,
+      transportType: "stdio" as const,
+      toolsMode: "all" as const,
+    };
+
+    const server = new OpenAPIServer(config);
+    const transport = new StdioServerTransport();
+
+    await server.start(transport);
+    console.error("PortaBilling MCP Server running on stdio");
   } catch (error) {
-    console.error("Failed to start server:", error)
-    process.exit(1)
+    console.error("Failed to start PortaBilling MCP server:", error);
+    process.exit(1);
   }
 }
 
-// Run the server
-main()
+main();
