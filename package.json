@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "main": "./dist/bundle.js",
+  "types": "./dist/types/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/ivo-toby/mcp-openapi-server"
@@ -14,7 +15,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "node build.js && chmod +x bin/mcp-server.js",
+    "build": "tsc && node build.js && chmod +x bin/mcp-server.js",
     "clean": "rm -rf dist",
     "lint": "eslint --config eslint.config.js src/**/*.ts",
     "lint:fix": "eslint --fix --config eslint.config.js src/**/*.ts",

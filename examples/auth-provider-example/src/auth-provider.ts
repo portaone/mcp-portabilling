@@ -1,220 +1,115 @@
-import { AuthProvider } from "@ivotoby/openapi-mcp-server"
-import { AxiosError } from "axios"
+import { AuthProvider } from "@ivotoby/openapi-mcp-server";
+import { AxiosError } from "axios";
 
-/**
- * Example AuthProvider that handles token expiration and refresh
- * This demonstrates automatic token refresh capabilities
- */
-export class RefreshableAuthProvider implements AuthProvider {
-  private accessToken: string | null = null
-  private refreshToken: string | null = null
-  private tokenExpiry: Date | null = null
-  private refreshUrl: string
+export class PortaBillingAuthProvider implements AuthProvider {
+  private portaBillingBaseUrl: string;
+  private loginId: string;
+  private password: string;
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiry: Date | null = null;
 
-  constructor(refreshUrl: string, initialAccessToken?: string, initialRefreshToken?: string) {
-    this.refreshUrl = refreshUrl
-    this.accessToken = initialAccessToken || null
-    this.refreshToken = initialRefreshToken || null
+  constructor(portaBillingBaseUrl: string, loginId: string, password: string) {
+    this.portaBillingBaseUrl = portaBillingBaseUrl;
+    this.loginId = loginId;
+    this.password = password;
+  }
+
+  async login(): Promise<void> {
+    const response = await fetch(`${this.portaBillingBaseUrl}/Session/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params: { login: this.loginId, password: this.password } }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      throw new Error(
+        `PortaBilling login failed: ${response.status} ${response.statusText}. ` +
+        `Error details: ${data.error ? data.error.message : "No specific error message provided."}`
+      );
+    }
+
+    this.accessToken = data.access_token;
+    this.refreshToken = data.refresh_token || null;
+    this.tokenExpiry = new Date(Date.now() + (data.expires_in || 3600) * 1000);
+    console.error("✅ PortaBilling login successful.");
   }
 
   async getAuthHeaders(): Promise<Record<string, string>> {
-    // Check if token is expired or about to expire (1 minute buffer)
     if (!this.accessToken || this.isTokenExpired()) {
       if (this.refreshToken) {
-        await this.refreshAccessToken()
+        await this.refreshAccessToken();
       } else {
-        throw new Error(
-          "Access token expired and no refresh token available. Please re-authenticate.",
-        )
+        console.error("Access token expired and no refresh token available. Attempting to re-login.");
+        await this.login();
       }
     }
-
-    return {
-      Authorization: `Bearer ${this.accessToken}`,
-      "Content-Type": "application/json",
-    }
+    return { "Authorization": `Bearer ${this.accessToken}`, "Content-Type": "application/json" };
   }
 
   async handleAuthError(error: AxiosError): Promise<boolean> {
-    // If we get a 401/403, try to refresh the token
-    if ((error.response?.status === 401 || error.response?.status === 403) && this.refreshToken) {
+    const statusCode = error.response?.status;
+
+    if (statusCode === 500) {
+      console.error(`PortaBilling API call failed with 500. Attempting to recover authentication.`);
+
+      if (this.refreshToken) {
+        try {
+          console.error("Attempting to refresh token...");
+          await this.refreshAccessToken();
+          return true;
+        } catch (refreshError: any) {
+          console.error(`Refresh token failed: ${refreshError.message}. Attempting full re-login.`);
+        }
+      }
+
       try {
-        await this.refreshAccessToken()
-        return true // Retry the request with new token
-      } catch (refreshError) {
+        console.error("Attempting full re-login with username/password...");
+        await this.login();
+        return true;
+      } catch (loginError: any) {
         throw new Error(
-          "Failed to refresh access token. Please re-authenticate with your credentials.",
-        )
+          `Failed to re-authenticate with PortaBilling: ${loginError.message}. ` +
+          `Please check your credentials and PortaBilling service status.`
+        );
       }
     }
 
-    return false // Don't retry for other errors
+    return false;
   }
 
-  /**
-   * Set initial tokens
-   */
-  setTokens(accessToken: string, refreshToken: string, expiresIn: number = 3600): void {
-    this.accessToken = accessToken
-    this.refreshToken = refreshToken
-    this.tokenExpiry = new Date(Date.now() + expiresIn * 1000)
-  }
-
-  /**
-   * Check if the current token is expired (with 1 minute buffer)
-   */
   private isTokenExpired(): boolean {
-    if (!this.tokenExpiry) return true
-    return this.tokenExpiry <= new Date(Date.now() + 60000) // 1 minute buffer
+    if (!this.tokenExpiry) {
+      return true;
+    }
+    return this.tokenExpiry <= new Date(Date.now() + 60000);
   }
 
-  /**
-   * Refresh the access token using the refresh token
-   */
   private async refreshAccessToken(): Promise<void> {
     if (!this.refreshToken) {
-      throw new Error("No refresh token available")
+      throw new Error("No refresh token available for PortaBilling.");
     }
 
-    // This is a mock implementation - replace with your actual refresh logic
-    const response = await fetch(this.refreshUrl, {
+    const response = await fetch(`${this.portaBillingBaseUrl}/Session/refresh_access_token`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        refresh_token: this.refreshToken,
-        grant_type: "refresh_token",
-      }),
-    })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params: { refresh_token: this.refreshToken } }),
+    });
 
-    if (!response.ok) {
-      throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`)
-    }
+    const data = await response.json();
 
-    const data = await response.json()
-    this.accessToken = data.access_token
-    this.refreshToken = data.refresh_token || this.refreshToken
-    this.tokenExpiry = new Date(Date.now() + (data.expires_in || 3600) * 1000)
-  }
-}
-
-/**
- * Example AuthProvider for APIs that require manual token updates
- * This is useful for APIs like Beatport where automatic refresh isn't possible
- */
-export class ManualTokenAuthProvider implements AuthProvider {
-  private token: string | null = null
-  private tokenExpiry: Date | null = null
-  private apiName: string
-
-  constructor(apiName: string = "API") {
-    this.apiName = apiName
-  }
-
-  async getAuthHeaders(): Promise<Record<string, string>> {
-    if (!this.token || this.isTokenExpired()) {
+    if (!response.ok || data.error) {
       throw new Error(
-        `${this.apiName} token expired or not set. Please update your token using the updateToken method.`,
-      )
+        `PortaBilling token refresh failed: ${response.status} ${response.statusText}. ` +
+        `Error details: ${data.error ? data.error.message : "No specific error message provided."}`
+      );
     }
 
-    return {
-      Authorization: `Bearer ${this.token}`,
-      "User-Agent": `${this.apiName}-MCP-Server/1.0.0`,
-    }
-  }
-
-  async handleAuthError(error: AxiosError): Promise<boolean> {
-    // For manual token management, we can't auto-retry
-    // Provide helpful error message instead
-    const statusCode = error.response?.status
-    if (statusCode === 401 || statusCode === 403) {
-      throw new Error(
-        `${this.apiName} authentication failed (${statusCode}). Your token may be expired or invalid.\n\n` +
-          "To get a new token:\n" +
-          `1. Visit the ${this.apiName} website and log in\n` +
-          "2. Open browser developer tools (F12)\n" +
-          "3. Go to Network tab and make an API request\n" +
-          "4. Copy the Authorization header value\n" +
-          "5. Update your token using the updateToken method",
-      )
-    }
-
-    return false // Never retry for manual token management
-  }
-
-  /**
-   * Update the token manually
-   */
-  updateToken(token: string, expiresIn: number = 3600): void {
-    // Remove 'Bearer ' prefix if present
-    this.token = token.replace(/^Bearer\s+/i, "")
-    this.tokenExpiry = new Date(Date.now() + expiresIn * 1000)
-    console.error(`✅ ${this.apiName} token updated successfully`)
-  }
-
-  /**
-   * Check if token is expired (with 5 minute buffer for manual tokens)
-   */
-  private isTokenExpired(): boolean {
-    if (!this.tokenExpiry) return true
-    return this.tokenExpiry <= new Date(Date.now() + 300000) // 5 minute buffer
-  }
-
-  /**
-   * Get token status for debugging
-   */
-  getTokenStatus(): { hasToken: boolean; isExpired: boolean; expiresAt: Date | null } {
-    return {
-      hasToken: !!this.token,
-      isExpired: this.isTokenExpired(),
-      expiresAt: this.tokenExpiry,
-    }
-  }
-}
-
-/**
- * Example AuthProvider for API key authentication
- * This is for APIs that use API keys instead of bearer tokens
- */
-export class ApiKeyAuthProvider implements AuthProvider {
-  private apiKey: string
-  private keyHeader: string
-
-  constructor(apiKey: string, keyHeader: string = "X-API-Key") {
-    this.apiKey = apiKey
-    this.keyHeader = keyHeader
-  }
-
-  async getAuthHeaders(): Promise<Record<string, string>> {
-    if (!this.apiKey) {
-      throw new Error("API key is required but not set")
-    }
-
-    return {
-      [this.keyHeader]: this.apiKey,
-      "Content-Type": "application/json",
-    }
-  }
-
-  async handleAuthError(error: AxiosError): Promise<boolean> {
-    // API keys typically don't expire, so auth errors are usually permanent
-    const statusCode = error.response?.status
-    if (statusCode === 401 || statusCode === 403) {
-      throw new Error(
-        `API key authentication failed (${statusCode}). Please check that your API key is valid and has the required permissions.`,
-      )
-    }
-
-    return false
-  }
-
-  /**
-   * Update the API key
-   */
-  updateApiKey(newApiKey: string): void {
-    this.apiKey = newApiKey
-    console.error("✅ API key updated successfully")
+    this.accessToken = data.access_token;
+    this.refreshToken = data.refresh_token || this.refreshToken;
+    this.tokenExpiry = new Date(Date.now() + (data.expires_in || 3600) * 1000);
+    console.error("✅ PortaBilling token refreshed successfully.");
   }
 }

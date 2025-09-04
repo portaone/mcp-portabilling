@@ -10,7 +10,9 @@
     "sourceMap": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationDir": "./dist/types"
   },
   "include": [
     "src/**/*",
